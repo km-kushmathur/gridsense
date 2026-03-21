@@ -1,39 +1,53 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchNudges } from '../api/gridsense';
+import { SkeletonCard } from './SkeletonCard';
+import { AnimatedContent } from './ui/AnimatedContent';
+import { SpotlightCard } from './ui/SpotlightCard';
+import { StarBorder } from './ui/StarBorder';
 
 const APPLIANCE_ORDER = ['ev_charger', 'dishwasher', 'dryer', 'washer'];
 
-const APPLIANCE_ICONS = {
-  dishwasher: { color: '#3B8BD4', icon: (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="7" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )},
-  washer: { color: '#22C55E', icon: (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="7" cy="8" r="3" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )},
-  ev_charger: { color: '#3B8BD4', icon: (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M8 1L4 7h4L6 13l6-7H8L10 1H8z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-    </svg>
-  )},
-  dryer: { color: '#888780', icon: (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M5 7c1-1 3 1 4 0" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  )},
+const APPLIANCE_META = {
+  dishwasher: {
+    color: '#3B8BD4',
+    label: 'Dishwasher',
+    icon: '🍽️',
+  },
+  washer: {
+    color: '#22C55E',
+    label: 'Washer',
+    icon: '🧺',
+  },
+  ev_charger: {
+    color: '#7dd3fc',
+    label: 'EV charger',
+    icon: '⚡',
+  },
+  dryer: {
+    color: '#F59E0B',
+    label: 'Dryer',
+    icon: '🌀',
+  },
 };
 
 function sortNudges(nudges) {
-  return [...nudges].sort((a, b) => {
-    const ai = APPLIANCE_ORDER.indexOf(a.appliance);
-    const bi = APPLIANCE_ORDER.indexOf(b.appliance);
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  return [...nudges].sort((left, right) => {
+    const leftIndex = APPLIANCE_ORDER.indexOf(left.appliance);
+    const rightIndex = APPLIANCE_ORDER.indexOf(right.appliance);
+    return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex);
+  });
+}
+
+function formatBestTime(bestTime) {
+  if (!bestTime) return 'Timing unavailable';
+  const parsed = new Date(bestTime);
+  if (Number.isNaN(parsed.getTime())) {
+    return bestTime;
+  }
+
+  return parsed.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
@@ -42,123 +56,118 @@ export function NudgePanel({ city }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleRefresh = async () => {
+  const loadNudges = useCallback(async () => {
     if (!city) return;
+
     setLoading(true);
     setError(null);
+
     try {
       const result = await fetchNudges(city);
-      setNudges(sortNudges(result.nudges || []));
+      setNudges(sortNudges(result.nudges || result || []));
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [city]);
+
+  useEffect(() => {
+    loadNudges();
+  }, [loadNudges]);
 
   return (
-    <div style={{ padding: '14px 16px' }}>
-      {/* Title */}
-      <div className="flex items-center justify-between mb-3">
-        <p style={{ fontSize: 11, color: '#555553', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          Appliance nudges — what to run tonight
-        </p>
-        <button
-          onClick={handleRefresh}
-          disabled={loading}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: 11,
-            color: '#555553',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.5 : 1,
-          }}
-        >
-          Refresh nudges
-        </button>
+    <div className="card-glass p-6 sm:p-7">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="panel-title">Smart appliance nudges</p>
+          <p className="panel-subtitle">
+            This panel turns forecast data into plain-language recommendations. The goal is simple: know what to run, when to run it, and how much carbon that move could avoid.
+          </p>
+        </div>
+
+        <StarBorder className="w-fit">
+          <button
+            onClick={loadNudges}
+            disabled={loading}
+            className="rounded-full bg-[#0d2015] px-4 py-2.5 text-sm font-semibold text-grid-clean transition hover:bg-[#14301e] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? 'Refreshing...' : 'Refresh nudges'}
+          </button>
+        </StarBorder>
       </div>
 
       {error && (
-        <p style={{ fontSize: 11, color: '#555553', marginBottom: 8 }}>Using cached data</p>
+        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          Some live nudge data failed to load. If cached or fallback nudges are available, they are shown below.
+        </div>
       )}
 
-      {/* Nudge cards or skeletons */}
-      {loading && !nudges.length ? (
-        <div>
-          <p style={{ fontSize: 11, color: '#555553', marginBottom: 8 }}>Generating nudges...</p>
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="skeleton" style={{ height: 64, borderRadius: 8, marginBottom: 8 }} />
+      {loading && nudges.length === 0 ? (
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {Array.from({ length: 4 }, (_, index) => (
+            <SkeletonCard key={index} className="h-[180px] rounded-[24px]" />
           ))}
         </div>
       ) : nudges.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '20px 0' }}>
-          <p style={{ fontSize: 12, color: '#555553' }}>Click Refresh to generate nudges</p>
+        <div className="mt-6 rounded-[24px] border border-dashed border-white/10 bg-black/15 px-6 py-12 text-center">
+          <p className="text-base text-white">No nudges available yet.</p>
+          <p className="mt-2 text-sm text-slate-400">
+            Try refreshing to generate a fresh set of appliance recommendations for {city}.
+          </p>
         </div>
       ) : (
-        <div>
-          {nudges.map((nudge, i) => {
-            const appliance = APPLIANCE_ICONS[nudge.appliance] || APPLIANCE_ICONS.dryer;
-            return (
-              <div
-                key={i}
-                className="flex gap-[10px]"
-                style={{
-                  background: '#0F1117',
-                  borderRadius: 8,
-                  border: '0.5px solid #1E1E1C',
-                  padding: '10px 12px',
-                  marginBottom: 8,
-                }}
-              >
-                {/* Icon block */}
-                <div
-                  className="flex items-center justify-center flex-shrink-0"
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
-                    background: '#1A1D27',
-                    color: appliance.color,
-                  }}
-                >
-                  {appliance.icon}
-                </div>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {nudges.map((nudge, index) => {
+            const meta = APPLIANCE_META[nudge.appliance] || APPLIANCE_META.dryer;
 
-                {/* Text block */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span style={{ fontSize: 12, fontWeight: 500, color: '#D0D0CE' }}>
-                      {nudge.appliance.replace(/_/g, ' ')}
-                    </span>
-                    <span style={{
-                      fontSize: 10,
-                      color: '#22C55E',
-                      background: 'rgba(34,197,94,0.08)',
-                      border: '0.5px solid rgba(34,197,94,0.25)',
-                      borderRadius: 10,
-                      padding: '2px 6px',
-                      marginLeft: 'auto',
-                    }}>
-                      −{Math.round(nudge.co2_saved_grams)}g CO₂
-                    </span>
+            return (
+              <AnimatedContent key={`${nudge.appliance}-${index}`} delay={90 * index}>
+                <SpotlightCard className="card-solid hover-lift h-full overflow-hidden border border-white/10 p-5">
+                  <div
+                    className="absolute inset-y-4 left-0 w-1 rounded-r-full"
+                    style={{ background: meta.color }}
+                  />
+
+                  <div className="relative flex h-full flex-col">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex h-12 w-12 items-center justify-center rounded-2xl text-xl"
+                          style={{ background: `${meta.color}18`, color: meta.color }}
+                        >
+                          <span>{nudge.emoji || meta.icon}</span>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Appliance</p>
+                          <p className="mt-1 text-lg font-semibold text-white">{meta.label}</p>
+                        </div>
+                      </div>
+
+                      <span
+                        className="rounded-full border px-3 py-1 text-xs font-semibold"
+                        style={{
+                          color: meta.color,
+                          borderColor: `${meta.color}44`,
+                          background: `${meta.color}12`,
+                        }}
+                      >
+                        -{Math.round(nudge.co2_saved_grams || 0)}g CO2
+                      </span>
+                    </div>
+
+                    <div className="mt-6">
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Best time</p>
+                      <p className="mt-2 font-display text-3xl font-semibold text-grid-clean">
+                        {formatBestTime(nudge.best_time)}
+                      </p>
+                    </div>
+
+                    <p className="mt-5 text-sm leading-7 text-slate-300">{nudge.message}</p>
                   </div>
-                  <p style={{ fontSize: 11, color: '#22C55E', marginBottom: 2 }}>
-                    Best time: {nudge.best_time}
-                  </p>
-                  <p style={{
-                    fontSize: 11,
-                    color: '#666663',
-                    lineHeight: 1.4,
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                  }}>
-                    {nudge.message}
-                  </p>
-                </div>
-              </div>
+                </SpotlightCard>
+              </AnimatedContent>
             );
           })}
         </div>

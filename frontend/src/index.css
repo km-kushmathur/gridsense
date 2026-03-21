@@ -4,6 +4,10 @@
 
 :root {
   color-scheme: dark;
+  --grid-bg: #091017;
+  --grid-bg-soft: #0f1621;
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-shadow: 0 28px 80px rgba(3, 10, 18, 0.42);
 }
 
 * {
@@ -17,8 +21,12 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: #0F1117;
-  color: #D0D0CE;
+  background:
+    radial-gradient(circle at top left, rgba(59, 139, 212, 0.18), transparent 26%),
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.14), transparent 30%),
+    linear-gradient(180deg, #071018 0%, #091017 42%, #0d121b 100%);
+  color: #d0d0ce;
+  font-family: 'Manrope', system-ui, sans-serif;
 }
 
 #root {
@@ -38,12 +46,11 @@ body {
   border-radius: 999px;
 }
 
-/* Skeleton shimmer */
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: #1A1D27;
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
 }
 
 .skeleton::after {
@@ -60,30 +67,153 @@ body {
   to { background-position: 200% 0; }
 }
 
-/* Live pulse dot */
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
 
-/* Map concentric circle pulse */
 @keyframes mapPulse {
   0%, 100% { opacity: 0.18; }
   50% { opacity: 0.35; }
 }
 
-/* Grid failure overlay fade in */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-/* Status color transitions */
-.status-transition {
-  transition: color 0.3s, background-color 0.3s;
+@keyframes floatParticle {
+  0% { transform: translate3d(0, 0, 0); opacity: 0.2; }
+  50% { transform: translate3d(14px, -18px, 0); opacity: 0.55; }
+  100% { transform: translate3d(-8px, -34px, 0); opacity: 0; }
 }
 
-/* Reduced motion */
+@keyframes gradientPan {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes blurIn {
+  from {
+    opacity: 0;
+    filter: blur(14px);
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmerText {
+  0% { background-position: 100% 50%; }
+  100% { background-position: -100% 50%; }
+}
+
+@layer components {
+  .page-shell {
+    @apply mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8;
+  }
+
+  .card-glass {
+    @apply rounded-[28px] border border-white/10 bg-white/[0.045] backdrop-blur-2xl;
+    box-shadow: var(--card-shadow);
+  }
+
+  .card-solid {
+    @apply rounded-[28px] border border-white/10 bg-[#101822]/95;
+    box-shadow: var(--card-shadow);
+  }
+
+  .section-kicker {
+    @apply inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-grid-clean;
+  }
+
+  .section-title {
+    @apply mt-4 font-display text-2xl tracking-tight text-white sm:text-[2rem];
+  }
+
+  .section-subtitle {
+    @apply mt-2 text-sm leading-6 text-slate-300 sm:text-[15px];
+  }
+
+  .hover-lift {
+    @apply transition duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_25px_60px_rgba(0,0,0,0.28)];
+  }
+
+  .panel-title {
+    @apply text-lg font-semibold text-white;
+  }
+
+  .panel-subtitle {
+    @apply mt-1 text-sm leading-6 text-slate-400;
+  }
+
+  .metric-chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-medium text-slate-300;
+  }
+
+  .pill-control {
+    @apply rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/[0.07];
+  }
+
+  .text-shimmer {
+    background-image: linear-gradient(120deg, rgba(255,255,255,0.55) 20%, #22c55e 40%, rgba(255,255,255,0.55) 60%);
+    background-size: 220% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmerText 3.5s linear infinite;
+  }
+
+  .spotlight-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .spotlight-card::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    background: radial-gradient(
+      280px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      rgba(34, 197, 94, 0.18),
+      transparent 42%
+    );
+    opacity: 0;
+    transition: opacity 0.25s ease-out;
+    pointer-events: none;
+  }
+
+  .spotlight-card:hover::before {
+    opacity: 1;
+  }
+
+  .star-shell {
+    position: relative;
+    border-radius: 999px;
+    padding: 1px;
+    background: linear-gradient(120deg, rgba(34, 197, 94, 0.18), rgba(59, 139, 212, 0.55), rgba(255, 255, 255, 0.12));
+  }
+
+  .star-shell > * {
+    border-radius: inherit;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

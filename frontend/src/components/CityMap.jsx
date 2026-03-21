@@ -1,96 +1,103 @@
-import { getStatusColor, getMoerColor } from '../constants';
+import { getMoerColor, getStatusColor, getStatusLabel } from '../constants';
+import { SkeletonCard } from './SkeletonCard';
 
 export function CityMap({ data, cityName, loading }) {
-  const statusColor = getStatusColor(data);
-  const moer = data?.moer || 0;
-
   if (loading || !data) {
     return (
-      <div className="w-full h-full flex items-center justify-center" style={{ background: '#0C0E14' }}>
-        <div className="skeleton" style={{ width: 80, height: 80, borderRadius: '50%' }} />
+      <div className="card-glass flex min-h-[360px] items-center justify-center p-6">
+        <div className="grid w-full gap-4">
+          <SkeletonCard className="h-5 w-40" />
+          <SkeletonCard className="h-[250px] w-full rounded-[28px]" />
+          <SkeletonCard className="h-5 w-72" />
+        </div>
       </div>
     );
   }
 
+  const statusColor = getStatusColor(data);
+  const statusLabel = getStatusLabel(data);
+  const moerColor = getMoerColor(data.moer || 0);
+
   return (
-    <div className="w-full h-full relative" style={{ background: '#0C0E14' }}>
-      {/* Dot grid overlay */}
+    <div className="card-glass relative min-h-[360px] overflow-hidden p-5 sm:p-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,197,94,0.08),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent)]" />
       <div
-        className="absolute inset-0"
+        className="pointer-events-none absolute inset-0 opacity-50"
         style={{
-          backgroundImage: `radial-gradient(circle, rgba(34,197,94,0.06) 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
         }}
       />
 
-      {/* Concentric circles */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        {/* Outer ring — 80px, pulsing */}
+      <div className="relative flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-grid-clean/80">Local grid pulse</p>
+          <h3 className="mt-2 text-xl font-semibold text-white">{cityName}</h3>
+          <p className="mt-1 text-sm text-slate-400">{data.region || 'Local balancing region'}</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-right">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">MOER now</p>
+          <p className="mt-2 text-3xl font-semibold" style={{ color: moerColor }}>
+            {Math.round(data.moer || 0)}
+          </p>
+          <p className="text-xs text-slate-500">lbs CO2 per MWh</p>
+        </div>
+      </div>
+
+      <div className="relative mt-6 flex min-h-[220px] items-center justify-center overflow-hidden rounded-[30px] border border-white/8 bg-[#09111a]/85">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,197,94,0.09),transparent_52%)]" />
+
         <div
-          className="absolute rounded-full"
+          className="absolute h-[280px] w-[280px] rounded-full"
           style={{
-            width: 80,
-            height: 80,
-            background: `${statusColor}2E`,
-            border: `1.5px solid ${statusColor}66`,
-            animation: 'mapPulse 3s ease-in-out infinite',
+            background: `${statusColor}16`,
+            border: `1px solid ${statusColor}24`,
+            animation: 'mapPulse 3.4s ease-in-out infinite',
           }}
         />
-        {/* Middle ring — 40px */}
         <div
-          className="absolute rounded-full"
+          className="absolute h-[172px] w-[172px] rounded-full"
           style={{
-            width: 40,
-            height: 40,
-            background: `${statusColor}4D`,
-            border: `1.5px solid ${statusColor}`,
+            background: `${statusColor}20`,
+            border: `1px solid ${statusColor}4a`,
           }}
         />
-        {/* Core dot — 10px */}
         <div
-          className="absolute rounded-full"
+          className="absolute h-[88px] w-[88px] rounded-full"
           style={{
-            width: 10,
-            height: 10,
+            background: `${statusColor}38`,
+            border: `1px solid ${statusColor}`,
+            boxShadow: `0 0 40px ${statusColor}22`,
+          }}
+        />
+        <div
+          className="absolute h-4 w-4 rounded-full"
+          style={{
             background: statusColor,
+            boxShadow: `0 0 24px ${statusColor}`,
           }}
         />
+
+        <div className="absolute left-6 top-6 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-xs font-medium text-slate-200">
+          Live signal view
+        </div>
+        <div className="absolute bottom-5 right-5 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-xs font-medium text-slate-200">
+          {statusLabel}
+        </div>
       </div>
 
-      {/* Tooltip — top right */}
-      <div
-        className="absolute"
-        style={{
-          top: 16,
-          right: 16,
-          background: '#1A1D27',
-          border: '0.5px solid #2A2A28',
-          borderRadius: 8,
-          padding: '10px 14px',
-        }}
-      >
-        <p style={{ fontSize: 12, fontWeight: 500, color: '#D0D0CE' }}>{cityName}</p>
-        <p style={{ fontSize: 11, color: '#555553' }}>{data.region || 'Grid region'}</p>
-        <p style={{ fontSize: 18, fontWeight: 500, color: getMoerColor(moer), marginTop: 4 }}>
-          {Math.round(moer)}
+      <div className="relative mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <p className="text-sm leading-7 text-slate-300">
+          This visualization is a readable stand-in for the local grid. The brighter the center glow, the healthier and cleaner the current operating window is for your city.
         </p>
-        <p style={{ fontSize: 10, color: '#444441' }}>lbs CO₂ per MWh — lower is better</p>
-      </div>
 
-      {/* Attribution — bottom center */}
-      <p
-        className="absolute"
-        style={{
-          bottom: 12,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          fontSize: 12,
-          color: '#555553',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        Map data powered by WattTime · Updated 1 min ago
-      </p>
+        <div className="flex flex-wrap gap-2">
+          <span className="metric-chip">{Math.round((data.pct_renewable || 0) * 100)}% renewable</span>
+          <span className="metric-chip">{statusLabel} now</span>
+        </div>
+      </div>
     </div>
   );
 }

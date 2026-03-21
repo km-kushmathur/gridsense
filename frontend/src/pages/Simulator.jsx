@@ -1,14 +1,34 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useSimulation } from '../hooks/useSimulation';
-import { TopBar } from '../components/TopBar';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { GridStressGauge } from '../components/GridStressGauge';
+import { SkeletonCard } from '../components/SkeletonCard';
+import { TopBar } from '../components/TopBar';
+import { AnimatedContent } from '../components/ui/AnimatedContent';
+import { CountUp } from '../components/ui/CountUp';
+import { GradientText } from '../components/ui/GradientText';
+import { StarBorder } from '../components/ui/StarBorder';
+import { useSimulation } from '../hooks/useSimulation';
 import { getStressColor } from '../constants';
 
 const SCENARIOS = [
-  { key: 'heat_wave', label: 'Heat wave', activeStyle: { border: '0.5px solid #EF4444', color: '#EF4444', background: '#1A0A0A' } },
-  { key: 'cold_snap', label: 'Cold snap', activeStyle: { border: '0.5px solid #EAB308', color: '#EAB308', background: '#1A1400' } },
-  { key: 'normal', label: 'Normal day', activeStyle: { border: '0.5px solid #3B8BD4', color: '#3B8BD4', background: '#0A1020' } },
+  {
+    key: 'heat_wave',
+    label: 'Heat wave',
+    tone: '#ef4444',
+    description: 'High cooling demand pushes the grid toward its failure threshold.',
+  },
+  {
+    key: 'cold_snap',
+    label: 'Cold snap',
+    tone: '#f59e0b',
+    description: 'Heating demand creates a sharp peak in carbon intensity and grid pressure.',
+  },
+  {
+    key: 'normal',
+    label: 'Normal day',
+    tone: '#38bdf8',
+    description: 'A steady demand profile shows what the grid looks like without extreme weather.',
+  },
 ];
 
 function formatHour(hour) {
@@ -20,30 +40,42 @@ function formatHour(hour) {
 
 function MiniTimeline({ timeline, currentHour }) {
   return (
-    <div className="flex gap-[2px]" style={{ height: 48 }}>
-      {timeline.map((point, i) => {
+    <div className="flex h-16 gap-[3px]">
+      {timeline.map((point, index) => {
         const stress = point.grid_stress || 0;
-        const color = getStressColor(stress);
-        const height = Math.max(4, (stress / 100) * 44);
+        const height = Math.max(6, (stress / 100) * 60);
+
         return (
-          <div
-            key={i}
-            className="flex-1 flex items-end"
-            style={{ opacity: i <= currentHour ? 1 : 0.2 }}
-          >
+          <div key={index} className="flex flex-1 items-end">
             <div
+              className="w-full rounded-t-md transition-opacity"
               style={{
-                width: '100%',
                 height,
-                background: color,
-                borderRadius: '2px 2px 0 0',
-                transition: 'opacity 0.2s',
+                background: getStressColor(stress),
+                opacity: index <= currentHour ? 1 : 0.22,
               }}
             />
           </div>
         );
       })}
     </div>
+  );
+}
+
+function ScenarioButton({ item, active, onSelect }) {
+  return (
+    <button
+      onClick={() => onSelect(item.key)}
+      className={`rounded-full border px-4 py-3 text-left transition ${
+        active
+          ? 'bg-white/[0.07] text-white'
+          : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20 hover:bg-white/[0.06]'
+      }`}
+      style={active ? { borderColor: `${item.tone}55`, boxShadow: `0 0 0 1px ${item.tone}22 inset` } : undefined}
+    >
+      <span className="block text-sm font-semibold">{item.label}</span>
+      <span className="mt-1 block text-xs leading-6 text-slate-400">{item.description}</span>
+    </button>
   );
 }
 
@@ -56,286 +88,327 @@ export default function Simulator() {
   const [playing, setPlaying] = useState(false);
   const [frame, setFrame] = useState(0);
 
-  const { simulation, loading } = useSimulation(city, scenario);
+  const { simulation, loading, error } = useSimulation(city, scenario);
 
   const timeline = simulation?.timeline || [];
   const shiftedTimeline = simulation?.shifted_timeline || [];
   const failureHour = simulation?.failure_hour ?? null;
   const totalFrames = timeline.length;
+  const scenarioMeta = SCENARIOS.find((item) => item.key === scenario) || SCENARIOS[0];
 
-  // Reset on scenario/simulation change
   useEffect(() => {
     setFrame(0);
     setPlaying(false);
   }, [simulation, scenario]);
 
-  // Playback timer — 800ms per step, auto-pause at failure
   useEffect(() => {
-    if (!playing || totalFrames === 0) return;
-    const timer = setInterval(() => {
-      setFrame((f) => {
-        const next = f + 1;
-        if (next >= totalFrames) {
+    if (!playing || totalFrames === 0) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setFrame((currentFrame) => {
+        const nextFrame = currentFrame + 1;
+
+        if (nextFrame >= totalFrames) {
           setPlaying(false);
-          return f;
+          return currentFrame;
         }
-        if (failureHour !== null && next === failureHour) {
+
+        if (failureHour !== null && nextFrame === failureHour) {
           setPlaying(false);
         }
-        return next;
+
+        return nextFrame;
       });
-    }, 800);
-    return () => clearInterval(timer);
-  }, [playing, totalFrames, failureHour]);
+    }, 900);
+
+    return () => window.clearInterval(timer);
+  }, [failureHour, playing, totalFrames]);
 
   const current = timeline[Math.min(frame, Math.max(0, totalFrames - 1))];
   const shifted = shiftedTimeline[Math.min(frame, Math.max(0, totalFrames - 1))];
   const failureActive = failureHour !== null && frame >= failureHour;
 
   const liveSavings = useMemo(() => {
-    if (!simulation?.savings_kg_co2 || totalFrames === 0) return 0;
+    if (!simulation?.savings_kg_co2 || totalFrames === 0) {
+      return 0;
+    }
+
     return (simulation.savings_kg_co2 / totalFrames) * frame;
   }, [frame, simulation, totalFrames]);
 
   const liveShifted = useMemo(() => {
-    if (!shiftedTimeline.length || !timeline.length) return 0;
-    let total = 0;
-    for (let i = 0; i <= Math.min(frame, timeline.length - 1); i++) {
-      const base = timeline[i]?.demand_index || 0;
-      const opt = shiftedTimeline[i]?.demand_index || 0;
-      total += Math.max(0, base - opt) * 10;
+    if (!timeline.length || !shiftedTimeline.length) {
+      return 0;
     }
+
+    let total = 0;
+
+    for (let index = 0; index <= Math.min(frame, timeline.length - 1); index += 1) {
+      const baseDemand = timeline[index]?.demand_index || 0;
+      const optimizedDemand = shiftedTimeline[index]?.demand_index || 0;
+      total += Math.max(0, baseDemand - optimizedDemand) * 10;
+    }
+
     return total;
-  }, [frame, timeline, shiftedTimeline]);
+  }, [frame, shiftedTimeline, timeline]);
+
+  const displayHour = current ? formatHour(new Date(current.time).getHours()) : '12 am';
 
   return (
-    <div style={{ background: '#0F1117', minHeight: '100vh' }}>
+    <div className="min-h-screen">
       <TopBar cityName={city} />
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: 20 }}>
-        {/* Title */}
-        <div className="mb-4">
+      <main className="page-shell pb-16">
+        <AnimatedContent delay={60}>
           <button
             onClick={() => navigate(`/city/${encodeURIComponent(city)}`)}
-            style={{ background: 'none', border: 'none', color: '#555553', fontSize: 12, cursor: 'pointer', marginBottom: 8, display: 'block' }}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/[0.06]"
           >
-            ← Back to dashboard
+            Back to dashboard
           </button>
-          <h1 style={{ fontSize: 14, fontWeight: 500, color: '#D0D0CE' }}>Grid failure simulator</h1>
-          <p style={{ fontSize: 12, color: '#555553', marginTop: 4 }}>
-            See what happens to the grid under different weather scenarios
-          </p>
-        </div>
+        </AnimatedContent>
 
-        {/* Scenario selector */}
-        <div className="flex gap-2 mb-4">
-          {SCENARIOS.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => setScenario(s.key)}
-              style={scenario === s.key ? {
-                ...s.activeStyle,
-                borderRadius: 7,
-                padding: 7,
-                fontSize: 12,
-                cursor: 'pointer',
-              } : {
-                background: '#1A1D27',
-                border: '0.5px solid #2A2A28',
-                borderRadius: 7,
-                padding: 7,
-                fontSize: 12,
-                color: '#666663',
-                cursor: 'pointer',
-              }}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        <AnimatedContent delay={110} className="mt-6">
+          <section className="card-glass p-6 sm:p-8">
+            <span className="section-kicker">Failure simulator</span>
+            <h1 className="section-title max-w-4xl">
+              See how <GradientText>{city}</GradientText> behaves when weather stress rises and what changes when GridSense shifts demand.
+            </h1>
+            <p className="section-subtitle max-w-3xl">
+              This page compares two timelines: unmanaged demand on the left and optimized demand on the right. The goal is to make the grid-failure story obvious even for someone who has never seen MOER or grid stress before.
+            </p>
+          </section>
+        </AnimatedContent>
 
-        {/* Playback controls */}
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => setPlaying((p) => !p)}
-            className="flex items-center justify-center"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: '#1A1D27',
-              border: '0.5px solid #2A2A28',
-              cursor: 'pointer',
-            }}
-          >
-            {playing ? (
-              <svg width="10" height="12" viewBox="0 0 10 12" fill="#D0D0CE">
-                <rect x="1" y="1" width="3" height="10" rx="0.5" />
-                <rect x="6" y="1" width="3" height="10" rx="0.5" />
-              </svg>
-            ) : (
-              <svg width="10" height="12" viewBox="0 0 10 12" fill="#D0D0CE">
-                <polygon points="1,1 9,6 1,11" />
-              </svg>
-            )}
-          </button>
-          <span style={{ fontSize: 13, fontWeight: 500, color: '#D0D0CE', minWidth: 60 }}>
-            {current ? formatHour(new Date(current.time).getHours()) : '12 am'}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(0, totalFrames - 1)}
-            value={frame}
-            onChange={(e) => {
-              setFrame(parseInt(e.target.value));
-              setPlaying(false);
-            }}
-            className="flex-1"
-            style={{ accentColor: '#22C55E' }}
-          />
-          <button
-            onClick={() => { setPlaying(false); setFrame(0); }}
-            style={{ background: 'none', border: 'none', fontSize: 12, color: '#555553', cursor: 'pointer' }}
-          >
-            Reset
-          </button>
-        </div>
+        <AnimatedContent delay={170} className="mt-8">
+          <section>
+            <span className="section-kicker">Choose a scenario</span>
+            <h2 className="section-title">What kind of day are we simulating?</h2>
+            <p className="section-subtitle">
+              Pick the weather condition that drives the demand curve. Heat waves are the strongest demo because they show how quickly the grid can tip into critical territory.
+            </p>
 
-        {/* Loading state */}
-        {loading && (
-          <div className="skeleton" style={{ height: 320, borderRadius: 10 }} />
-        )}
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              {SCENARIOS.map((item) => (
+                <ScenarioButton
+                  key={item.key}
+                  item={item}
+                  active={scenario === item.key}
+                  onSelect={setScenario}
+                />
+              ))}
+            </div>
+          </section>
+        </AnimatedContent>
 
-        {/* Two-column comparison */}
-        {!loading && simulation && (
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-              {/* Without GridSense */}
-              <div
-                style={{
-                  background: '#13151F',
-                  borderRadius: 10,
-                  border: '0.5px solid #1E1E1C',
-                  padding: 14,
-                  position: 'relative',
-                }}
-              >
-                <p style={{ fontSize: 11, color: '#555553', marginBottom: 12 }}>
-                  <span style={{ fontWeight: 500 }}>Without GridSense</span> — no load shifting
+        <AnimatedContent delay={220} className="mt-8">
+          <section className="card-solid p-5 sm:p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="panel-title">Playback controls</p>
+                <p className="panel-subtitle">
+                  Move hour by hour through the simulated day. Watch when the unmanaged grid crosses into danger and compare that with the optimized path.
                 </p>
-                <GridStressGauge value={current?.grid_stress || 0} />
-                <div className="mt-3 text-center">
-                  <p style={{ fontSize: 22, fontWeight: 500, color: getStressColor(current?.grid_stress || 0) }}>
-                    {Math.round(current?.grid_stress || 0)}%
-                  </p>
-                  <p style={{ fontSize: 11, color: '#555553' }}>Grid stress</p>
-                  <div className="mt-2">
-                    {failureActive ? (
-                      <span style={{
-                        fontSize: 11, color: '#EF4444',
-                        background: 'rgba(239,68,68,0.08)', border: '0.5px solid rgba(239,68,68,0.25)',
-                        borderRadius: 10, padding: '3px 8px',
-                      }}>
-                        Grid failure
-                      </span>
-                    ) : frame > 0 ? (
-                      <span style={{
-                        fontSize: 11, color: '#EF4444',
-                        background: 'rgba(239,68,68,0.08)', border: '0.5px solid rgba(239,68,68,0.25)',
-                        borderRadius: 10, padding: '3px 8px',
-                      }}>
-                        Simulating...
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <MiniTimeline timeline={timeline} currentHour={frame} />
-                </div>
-
-                {/* Failure overlay */}
-                {failureActive && (
-                  <div
-                    style={{
-                      marginTop: 10,
-                      background: '#1A0000',
-                      border: '0.5px solid rgba(239,68,68,0.38)',
-                      borderRadius: 8,
-                      padding: '10px 14px',
-                      animation: 'fadeIn 0.5s ease-in forwards',
-                    }}
-                  >
-                    <p style={{ fontSize: 13, fontWeight: 500, color: '#EF4444' }}>
-                      Grid failure — rolling blackouts
-                    </p>
-                    <p style={{ fontSize: 11, color: '#793333', marginTop: 4 }}>
-                      Grid stress exceeded 85% — demand outpaced supply
-                    </p>
-                  </div>
-                )}
               </div>
 
-              {/* With GridSense */}
-              <div
-                style={{
-                  background: '#13151F',
-                  borderRadius: 10,
-                  border: '0.5px solid rgba(34,197,94,0.15)',
-                  padding: 14,
+              <div className="flex flex-wrap items-center gap-3">
+                <StarBorder className="w-fit">
+                  <button
+                    onClick={() => setPlaying((value) => !value)}
+                    className="rounded-full bg-[#0d2015] px-5 py-3 text-sm font-semibold text-grid-clean transition hover:bg-[#14301e]"
+                  >
+                    {playing ? 'Pause' : 'Play'}
+                  </button>
+                </StarBorder>
+
+                <button
+                  onClick={() => {
+                    setPlaying(false);
+                    setFrame(0);
+                  }}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/[0.06]"
+                >
+                  Reset
+                </button>
+
+                <span className="metric-chip">{displayHour}</span>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center gap-4">
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, totalFrames - 1)}
+                value={frame}
+                onChange={(event) => {
+                  setFrame(parseInt(event.target.value, 10));
+                  setPlaying(false);
                 }}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <p style={{ fontSize: 11, color: '#555553' }}>
-                    <span style={{ fontWeight: 500 }}>With GridSense</span> — load shifted to clean windows
-                  </p>
-                </div>
-                <GridStressGauge value={shifted?.grid_stress || 0} />
-                <div className="mt-3 text-center">
-                  <p style={{ fontSize: 22, fontWeight: 500, color: getStressColor(shifted?.grid_stress || 0) }}>
-                    {Math.round(shifted?.grid_stress || 0)}%
-                  </p>
-                  <p style={{ fontSize: 11, color: '#555553' }}>Grid stress</p>
-                  <div className="mt-2">
-                    <span style={{
-                      fontSize: 11, color: '#22C55E',
-                      background: 'rgba(34,197,94,0.08)', border: '0.5px solid rgba(34,197,94,0.25)',
-                      borderRadius: 10, padding: '3px 8px',
-                    }}>
-                      Stable
+                className="w-full"
+                style={{ accentColor: scenarioMeta.tone }}
+              />
+            </div>
+          </section>
+        </AnimatedContent>
+
+        {loading ? (
+          <AnimatedContent delay={280} className="mt-8 grid gap-6 xl:grid-cols-2">
+            <SkeletonCard className="h-[420px] rounded-[28px]" />
+            <SkeletonCard className="h-[420px] rounded-[28px]" />
+          </AnimatedContent>
+        ) : (
+          <>
+            <div className="mt-8 grid gap-6 xl:grid-cols-2">
+              <AnimatedContent delay={280}>
+                <section className="card-solid relative overflow-hidden p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-300">Without GridSense</p>
+                      <h2 className="mt-3 text-2xl font-semibold text-white">Demand follows the spike</h2>
+                      <p className="mt-2 text-sm leading-7 text-slate-300">
+                        This is the unmanaged version of the day. Loads stack into the same hot hours, which pushes the grid toward its failure threshold.
+                      </p>
+                    </div>
+
+                    <span className="metric-chip">Natural demand</span>
+                  </div>
+
+                  <div className="mt-8 rounded-[26px] border border-white/8 bg-black/20 p-4">
+                    <GridStressGauge value={current?.grid_stress || 0} />
+                  </div>
+
+                  <div className="mt-6 flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current stress</p>
+                      <p
+                        className="mt-2 text-4xl font-semibold"
+                        style={{ color: getStressColor(current?.grid_stress || 0) }}
+                      >
+                        {Math.round(current?.grid_stress || 0)}%
+                      </p>
+                    </div>
+
+                    <span
+                      className="rounded-full border px-3 py-1 text-sm font-semibold"
+                      style={{
+                        color: failureActive ? '#f87171' : '#fca5a5',
+                        borderColor: failureActive ? 'rgba(239,68,68,0.35)' : 'rgba(248,113,113,0.22)',
+                        background: failureActive ? 'rgba(127,29,29,0.35)' : 'rgba(239,68,68,0.08)',
+                      }}
+                    >
+                      {failureActive ? 'Grid failure' : 'Unmanaged load'}
                     </span>
                   </div>
-                </div>
-                <div className="mt-3">
-                  <MiniTimeline timeline={shiftedTimeline} currentHour={frame} />
-                </div>
-              </div>
+
+                  <div className="mt-6">
+                    <MiniTimeline timeline={timeline} currentHour={frame} />
+                  </div>
+
+                  {failureActive && (
+                    <div className="mt-6 rounded-[24px] border border-red-500/40 bg-red-950/40 px-5 py-4" style={{ animation: 'fadeIn 0.45s ease-out both' }}>
+                      <p className="text-base font-semibold text-red-300">GRID FAILURE</p>
+                      <p className="mt-2 text-sm leading-7 text-red-100/80">
+                        Demand crossed the critical threshold. This is the moment rolling blackouts or emergency interventions become plausible in the scenario.
+                      </p>
+                    </div>
+                  )}
+                </section>
+              </AnimatedContent>
+
+              <AnimatedContent delay={340}>
+                <section className="card-solid relative overflow-hidden p-6">
+                  <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.18),transparent_60%)]" />
+
+                  <div className="relative flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-grid-clean">With GridSense</p>
+                      <h2 className="mt-3 text-2xl font-semibold text-white">Demand shifts into cleaner hours</h2>
+                      <p className="mt-2 text-sm leading-7 text-slate-300">
+                        This optimized path moves flexible demand out of the dirtiest, highest-stress window and into cleaner hours where the grid has room to breathe.
+                      </p>
+                    </div>
+
+                    <span className="metric-chip">Shifted load</span>
+                  </div>
+
+                  <div className="mt-8 rounded-[26px] border border-white/8 bg-black/20 p-4">
+                    <GridStressGauge value={shifted?.grid_stress || 0} />
+                  </div>
+
+                  <div className="mt-6 flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current stress</p>
+                      <p
+                        className="mt-2 text-4xl font-semibold"
+                        style={{ color: getStressColor(shifted?.grid_stress || 0) }}
+                      >
+                        {Math.round(shifted?.grid_stress || 0)}%
+                      </p>
+                    </div>
+
+                    <span className="rounded-full border border-grid-clean/30 bg-grid-clean/10 px-3 py-1 text-sm font-semibold text-grid-clean">
+                      Grid stable
+                    </span>
+                  </div>
+
+                  <div className="mt-6">
+                    <MiniTimeline timeline={shiftedTimeline} currentHour={frame} />
+                  </div>
+                </section>
+              </AnimatedContent>
             </div>
 
-            {/* Stats bar */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-              <div style={{ background: '#13151F', borderRadius: 8, padding: '10px 12px' }}>
-                <p style={{ fontSize: 18, fontWeight: 500, color: '#D0D0CE' }}>
-                  {current ? formatHour(new Date(current.time).getHours()) : '—'}
+            <AnimatedContent delay={400} className="mt-8">
+              <section>
+                <span className="section-kicker">Impact summary</span>
+                <h2 className="section-title">What changed because the load moved?</h2>
+                <p className="section-subtitle">
+                  These live counters explain the operational difference between the two timelines. This is the section that makes the demo concrete for judges and first-time visitors.
                 </p>
-                <p style={{ fontSize: 11, color: '#444441' }}>Current hour</p>
-              </div>
-              <div style={{ background: '#13151F', borderRadius: 8, padding: '10px 12px' }}>
-                <p style={{ fontSize: 18, fontWeight: 500, color: '#22C55E' }}>
-                  {liveSavings.toFixed(1)} kg
-                </p>
-                <p style={{ fontSize: 11, color: '#444441' }}>CO₂ saved so far</p>
-              </div>
-              <div style={{ background: '#13151F', borderRadius: 8, padding: '10px 12px' }}>
-                <p style={{ fontSize: 18, fontWeight: 500, color: '#22C55E' }}>
-                  {Math.round(liveShifted)} kWh
-                </p>
-                <p style={{ fontSize: 11, color: '#444441' }}>Load shifted</p>
-              </div>
-            </div>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  <div className="card-solid p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current hour</p>
+                    <p className="mt-3 font-display text-4xl font-semibold text-white">{displayHour}</p>
+                    <p className="mt-2 text-sm leading-7 text-slate-400">The playback position through the simulated day.</p>
+                  </div>
+
+                  <div className="card-solid p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">CO2 saved so far</p>
+                    <CountUp
+                      value={liveSavings}
+                      decimals={1}
+                      suffix=" kg"
+                      className="mt-3 block font-display text-4xl font-semibold text-grid-clean"
+                    />
+                    <p className="mt-2 text-sm leading-7 text-slate-400">Cumulative avoided emissions from shifting load away from the dirtiest window.</p>
+                  </div>
+
+                  <div className="card-solid p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Load shifted</p>
+                    <CountUp
+                      value={liveShifted}
+                      decimals={0}
+                      suffix=" kWh"
+                      className="mt-3 block font-display text-4xl font-semibold text-sky-300"
+                    />
+                    <p className="mt-2 text-sm leading-7 text-slate-400">Flexible demand moved into lower-stress hours as the simulation progresses.</p>
+                  </div>
+                </div>
+              </section>
+            </AnimatedContent>
           </>
         )}
-      </div>
+      </main>
+
+      {error && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-amber-400/20 bg-[#23180d]/95 px-4 py-2 text-sm text-amber-100 shadow-xl">
+          Simulation data failed to load cleanly. The page may be showing fallback data.
+        </div>
+      )}
     </div>
   );
 }

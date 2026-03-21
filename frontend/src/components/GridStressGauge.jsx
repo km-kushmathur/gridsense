@@ -28,8 +28,8 @@ export function GridStressGauge({ value = 0 }) {
   const needleY = cy - radius * Math.sin(needleAngle);
 
   return (
-    <div className="flex justify-center">
-      <svg viewBox="0 0 140 80" style={{ width: 140, height: 80 }}>
+    <div className="flex flex-col items-center">
+      <svg viewBox="0 0 140 92" className="h-[92px] w-[150px]">
         {/* Background arc */}
         <path
           d="M 15 75 A 55 55 0 0 1 125 75"
@@ -68,6 +68,7 @@ export function GridStressGauge({ value = 0 }) {
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={`${activeLength} ${fullArcLength - activeLength}`}
+          style={critical ? { filter: 'drop-shadow(0 0 6px rgba(239,68,68,0.45))' } : undefined}
         />
 
         {/* Needle */}
@@ -86,16 +87,20 @@ export function GridStressGauge({ value = 0 }) {
         <circle cx={cx} cy={cy} r="4" fill="#1A1D27" stroke="#D0D0CE" strokeWidth="1.5" />
 
         {/* Scale labels */}
-        <text x="10" y="80" style={{ fontSize: 9, fill: '#444441' }}>0%</text>
-        <text x="118" y="80" style={{ fontSize: 9, fill: '#444441' }}>100%</text>
+        <text x="15" y="80" style={{ fontSize: 9, fill: '#22C55E' }}>Safe</text>
+        <text x="106" y="80" style={{ fontSize: 9, fill: '#EF4444' }}>Critical</text>
 
-        {/* CRITICAL text */}
+        <text x="70" y="60" textAnchor="middle" style={{ fontSize: 18, fontWeight: 700, fill: color }}>
+          {Math.round(clamped)}%
+        </text>
+
         {critical && (
-          <text x="70" y="14" textAnchor="middle" style={{ fontSize: 9, fill: '#EF4444' }}>
+          <text x="70" y="14" textAnchor="middle" style={{ fontSize: 9, fill: '#EF4444', letterSpacing: 1.4 }}>
             CRITICAL
           </text>
         )}
       </svg>
+      <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">Grid stress</p>
     </div>
   );
 }
