@@ -2,57 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---- Base ---- */
+:root {
+  color-scheme: dark;
+}
+
 * {
-  margin: 0;
-  padding: 0;
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background: #0f1117;
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(62, 242, 200, 0.12), transparent 28%),
+    radial-gradient(circle at top right, rgba(249, 115, 22, 0.12), transparent 26%),
+    linear-gradient(180deg, #071019 0%, #0b1220 38%, #050914 100%);
   color: #e2e8f0;
+}
+
+#root {
   min-height: 100vh;
 }
 
-/* ---- Scrollbar ---- */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #1a1d27;
+  background: rgba(15, 23, 42, 0.9);
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #2a2d3a;
-  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
 }
 
-/* ---- Map pulse ring ---- */
-@keyframes map-pulse {
-  0%, 100% { opacity: 0.35; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.04); }
-}
-.map-pulse {
-  animation: map-pulse 2s ease-in-out infinite;
-}
-
-/* ---- Skeleton shimmer ---- */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
 .skeleton {
-  background: linear-gradient(90deg, #1a1d27 25%, #2a2d3a 50%, #1a1d27 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
 }
 
-/* ---- Leaflet overrides ---- */
-.leaflet-container {
-  background: #0f1117 !important;
-  border-radius: 12px;
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  animation: shimmer 1.6s infinite;
 }
-.leaflet-control-attribution {
-  display: none !important;
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
