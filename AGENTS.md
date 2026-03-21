@@ -12,7 +12,7 @@ Frontend is React + Vite + Tailwind. No TypeScript — plain JS only.
 
 ## API Keys
 All secrets come from environment variables. Never hardcode.
-Keys needed: WATTTIME_USER, WATTTIME_PASSWORD, ANTHROPIC_API_KEY, GOOGLE_MAPS_API_KEY
+Keys needed: WATTTIME_USER, WATTTIME_PASSWORD, AZURE_AI_ENDPOINT, AZURE_AI_KEY, AZURE_AI_MODEL, GOOGLE_MAPS_API_KEY
 
 ## WattTime Rules
 - Always use v3 API endpoints (not v2)
@@ -21,7 +21,7 @@ Keys needed: WATTTIME_USER, WATTTIME_PASSWORD, ANTHROPIC_API_KEY, GOOGLE_MAPS_AP
 - Production: use /v3/region-to-signal to get region from lat/lng
 
 ## Nudge Generation
-Use Claude API claude-sonnet-4-6. Keep nudges under 40 words.
+Use Claude Sonnet via Azure AI Foundry (azure-ai-inference SDK). Keep nudges under 40 words.
 Tone: friendly, specific, actionable. Always mention % renewable or MOER value.
 
 ## API Contract

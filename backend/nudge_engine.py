@@ -1,9 +1,10 @@
-"""Claude-powered appliance nudge generation engine."""
+"""Claude-powered appliance nudge generation engine (Azure AI Foundry)."""
 
 import json
 import os
 
-import anthropic
+from azure.ai.inference import ChatCompletionsClient
+from azure.core.credentials import AzureKeyCredential
 
 # kWh per typical cycle for each appliance
 APPLIANCE_KWH: dict[str, float] = {
@@ -41,10 +42,14 @@ Example:
 
 
 class NudgeEngine:
-    """Generates appliance nudge messages using Claude API and forecast data."""
+    """Generates appliance nudge messages using Claude on Azure AI Foundry."""
 
     def __init__(self) -> None:
-        self._client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+        self._client = ChatCompletionsClient(
+            endpoint=os.getenv("AZURE_AI_ENDPOINT", ""),
+            credential=AzureKeyCredential(os.getenv("AZURE_AI_KEY", "")),
+        )
+        self._model = os.getenv("AZURE_AI_MODEL", "claude-sonnet-4-20250514")
 
     def _find_cleanest_windows(
         self, forecast: list[dict], n: int = 3
@@ -97,14 +102,16 @@ class NudgeEngine:
         )
 
         try:
-            response = self._client.messages.create(
-                model="claude-sonnet-4-20250514",
+            response = self._client.complete(
+                model=self._model,
                 max_tokens=600,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_prompt}],
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
             )
 
-            raw_text = response.content[0].text.strip()
+            raw_text = response.choices[0].message.content.strip()
 
             # Extract JSON from the response (handle markdown code blocks)
             if "```" in raw_text:
