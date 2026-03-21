@@ -18,6 +18,15 @@ CACHE_TTL = 300  # 5 minutes
 TOKEN_TTL = 1500  # 25 minutes (tokens expire at 30)
 
 BASE_URL = "https://api.watttime.org"
+FORECAST_FALLBACK_REGION = "CAISO_NORTH"
+
+
+class WattTimeAPIError(RuntimeError):
+    """Raised when WattTime returns an HTTP error."""
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class WattTimeClient:
@@ -89,8 +98,37 @@ class WattTimeClient:
 
                 resp.raise_for_status()
                 return resp.json()
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            raise WattTimeAPIError("WattTime data service is unavailable.", status_code=status_code) from exc
         except httpx.HTTPError as exc:
-            raise RuntimeError("WattTime data service is unavailable.") from exc
+            raise WattTimeAPIError("WattTime data service is unavailable.") from exc
+
+    def _parse_forecast_payload(self, data: dict | list) -> list[dict]:
+        """Normalize the forecast response into GridSense forecast rows."""
+        if isinstance(data, dict) and "data" in data:
+            raw_points = data["data"]
+        elif isinstance(data, list):
+            raw_points = data
+        else:
+            raw_points = []
+
+        forecast: list[dict] = []
+        for point in raw_points:
+            if not isinstance(point, dict):
+                continue
+            moer_val = float(point.get("value", 0))
+            green = max(0, min(100, 100 - (moer_val - 200) / 10))
+            forecast.append({
+                "time": point.get("point_time", datetime.now(timezone.utc).isoformat()),
+                "moer": moer_val,
+                "pct_renewable": round(green / 100, 2),
+            })
+
+        if any(float(row["moer"]) > 0.0 for row in forecast):
+            forecast = [row for row in forecast if float(row["moer"]) > 0.0]
+
+        return forecast
 
     async def get_region(self, lat: float, lng: float) -> str:
         """Look up the WattTime balancing authority region for coordinates.
@@ -173,30 +211,21 @@ class WattTimeClient:
         if cached and (time.time() - cached[0]) < CACHE_TTL:
             return cached[1]
 
-        data = await self._authed_get(
-            "/v3/forecast",
-            params={"region": region, "signal_type": "co2_moer"},
-        )
-
-        # Parse the forecast response
-        if isinstance(data, dict) and "data" in data:
-            raw_points = data["data"]
-        elif isinstance(data, list):
-            raw_points = data
-        else:
-            raw_points = []
-
-        forecast = []
-        for point in raw_points:
-            if not isinstance(point, dict):
-                continue
-            moer_val = float(point.get("value", 0))
-            green = max(0, min(100, 100 - (moer_val - 200) / 10))
-            forecast.append({
-                "time": point.get("point_time", datetime.now(timezone.utc).isoformat()),
-                "moer": moer_val,
-                "pct_renewable": round(green / 100, 2),
-            })
+        try:
+            data = await self._authed_get(
+                "/v3/forecast",
+                params={"region": region, "signal_type": "co2_moer"},
+            )
+            forecast = self._parse_forecast_payload(data)
+        except WattTimeAPIError as exc:
+            if exc.status_code == 403 and region != FORECAST_FALLBACK_REGION:
+                fallback_data = await self._authed_get(
+                    "/v3/forecast",
+                    params={"region": FORECAST_FALLBACK_REGION, "signal_type": "co2_moer"},
+                )
+                forecast = self._parse_forecast_payload(fallback_data)
+            else:
+                raise
 
         self._forecast_cache[region] = (time.time(), forecast)
         return forecast

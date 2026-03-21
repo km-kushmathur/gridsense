@@ -22,7 +22,7 @@ try:
     )
     from .mock_data import build_mock_simulation, get_mock_intensity, get_mock_weather_response
     from .nudge_engine import NudgeEngine
-    from .settings import use_mock_data
+    from .settings import azure_openai_configured, use_mock_data
     from .watttime_client import WattTimeClient
     from .weather_client import WeatherClient
 except ImportError:
@@ -40,7 +40,7 @@ except ImportError:
     )
     from mock_data import build_mock_simulation, get_mock_intensity, get_mock_weather_response
     from nudge_engine import NudgeEngine
-    from settings import use_mock_data
+    from settings import azure_openai_configured, use_mock_data
     from watttime_client import WattTimeClient
     from weather_client import WeatherClient
 
@@ -130,7 +130,7 @@ async def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         watttime=use_mock_data() or bool(os.getenv("WATTTIME_USER") and os.getenv("WATTTIME_PASSWORD")),
-        openai=use_mock_data() or bool(os.getenv("OPENAI_API_KEY")),
+        openai=use_mock_data() or azure_openai_configured(),
     )
 
 

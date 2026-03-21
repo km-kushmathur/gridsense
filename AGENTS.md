@@ -12,7 +12,7 @@ Backend: FastAPI Python. Frontend: React + Vite + Tailwind. No TypeScript.
 
 ## API Keys
 All secrets come from environment variables. Never hardcode.
-Keys needed: WATTTIME_USER, WATTTIME_PASSWORD, OPENAI_API_KEY, GOOGLE_MAPS_API_KEY
+Keys needed: WATTTIME_USER, WATTTIME_PASSWORD, AZURE_OPENAI_BASE_URL, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT, GOOGLE_MAPS_API_KEY
 Open-Meteo requires no API key.
 
 ## WattTime Rules
@@ -22,7 +22,7 @@ Open-Meteo requires no API key.
 - Production: use /v3/region-to-signal to get region from lat/lng
 
 ## Nudge Generation
-Use OpenAI gpt-4.1-mini. Keep nudges under 40 words.
+Use Azure OpenAI with a deployed `gpt-5.4-mini` model. Keep nudges under 40 words.
 Tone: friendly, specific, actionable. Always mention % renewable or MOER value.
 
 ## API Contract

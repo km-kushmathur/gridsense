@@ -18,10 +18,16 @@ For live mode set:
 USE_MOCK_DATA=false
 WATTTIME_USER=...
 WATTTIME_PASSWORD=...
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-4.1-mini
+AZURE_OPENAI_BASE_URL=https://your-resource.services.ai.azure.com/openai/v1/
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_DEPLOYMENT=gpt-5.4-mini
 GOOGLE_MAPS_API_KEY=...
 ```
+
+Legacy compatibility:
+- `AZURE_AI_ENDPOINT` is also accepted and normalized to an OpenAI-compatible `/openai/v1/` base URL.
+- `AZURE_AI_KEY` and `AZURE_AI_MODEL` are accepted as aliases for the Azure OpenAI key and deployment name.
+- In Azure, the `model` value used by the API is your deployment name, not just the raw model family name.
 
 ### 2. Start the backend
 

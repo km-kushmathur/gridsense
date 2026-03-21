@@ -1,12 +1,24 @@
-"""OpenAI-powered appliance nudge generation engine."""
+"""Azure OpenAI-powered appliance nudge generation engine."""
 
 import json
-import os
+import httpx
 
 try:
-    from .settings import use_mock_data
+    from .settings import (
+        azure_openai_api_key,
+        azure_openai_base_url,
+        azure_openai_configured,
+        azure_openai_deployment,
+        use_mock_data,
+    )
 except ImportError:
-    from settings import use_mock_data
+    from settings import (
+        azure_openai_api_key,
+        azure_openai_base_url,
+        azure_openai_configured,
+        azure_openai_deployment,
+        use_mock_data,
+    )
 
 # kWh per typical cycle for each appliance
 APPLIANCE_KWH: dict[str, float] = {
@@ -23,27 +35,22 @@ APPLIANCE_EMOJI: dict[str, str] = {
     "dryer": "👖",
 }
 
-SYSTEM_PROMPT = """You are GridSense, a friendly energy advisor for college campuses,
-apartment buildings, and small towns. Return JSON {nudges: [...]} with exactly
-4 items. Each: {appliance, emoji, best_time, co2_saved_grams, message}.
-Message under 35 words. Mention specific time. Friendly not preachy.
-Always include one EV charger nudge."""
+SYSTEM_PROMPT = """You write short, friendly appliance timing tips for GridSense.
+Keep each message practical and calm. Avoid warnings, safety language, or policy talk.
+Use the supplied clean-energy windows and return four concise recommendations."""
 
 
 class NudgeEngine:
-    """Generates appliance nudge messages using OpenAI."""
+    """Generates appliance nudge messages using Azure OpenAI."""
 
     def __init__(self) -> None:
-        self._client = None
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
-        if api_key:
-            try:
-                from openai import OpenAI
-            except ImportError:
-                self._client = None
-            else:
-                self._client = OpenAI(api_key=api_key)
-        self._model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
+        self._base_url = azure_openai_base_url()
+        self._api_key = azure_openai_api_key()
+        self._model = azure_openai_deployment()
+
+    def is_configured(self) -> bool:
+        """Return whether Azure OpenAI is configured for live nudge generation."""
+        return azure_openai_configured()
 
     def _find_cleanest_windows(
         self, forecast: list[dict], n: int = 3
@@ -111,30 +118,44 @@ class NudgeEngine:
         )
 
         user_prompt = (
-            f"City: {city}\n"
-            f"Current temperature: {current_weather.get('temp_c', 0)}C\n"
-            f"Heat wave: {current_weather.get('heat_wave', False)}\n"
-            f"Current MOER: {current_moer} lbs CO₂/MWh\n\n"
-            f"The 3 cleanest windows in the next 24 hours:\n{cleanest_summary}\n\n"
-            f"Generate nudges for these 4 appliances: dishwasher (1.2 kWh), "
-            f"washer (0.5 kWh), EV charger (7.2 kWh), dryer (3.5 kWh).\n"
-            f"Respond with JSON {{\"nudges\": [...]}} only."
+            f"Create four appliance timing recommendations for {city}.\n"
+            f"Current temperature: {current_weather.get('temp_c', 0)}C.\n"
+            f"Heat wave conditions: {current_weather.get('heat_wave', False)}.\n"
+            f"Current carbon intensity: {current_moer} lbs CO2 per MWh.\n\n"
+            f"Best upcoming windows:\n{cleanest_summary}\n\n"
+            "Use each appliance exactly once: dishwasher, washer, ev_charger, dryer.\n"
+            "Return a JSON object with key nudges.\n"
+            "Each nudge should include appliance, best_time, and message.\n"
+            "Keep each message under 30 words and mention either renewable share or carbon intensity.\n"
+            "Use one of the supplied times for best_time."
         )
 
         try:
-            if use_mock_data() or self._client is None or not self._model:
+            if use_mock_data() or not self.is_configured() or not self._model:
                 return self._build_fallback_nudges(forecast, current_moer, current_weather)
 
-            response = self._client.chat.completions.create(
-                model=self._model,
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self._base_url.rstrip('/')}/chat/completions",
+                    headers={
+                        "api-key": self._api_key,
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": self._model,
+                        "response_format": {"type": "json_object"},
+                        "max_completion_tokens": 600,
+                        "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                    },
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                payload = response.json()
 
-            raw_text = response.choices[0].message.content or "{}"
+            raw_text = payload["choices"][0]["message"]["content"] or "{}"
             payload = json.loads(raw_text)
             nudges_raw = payload.get("nudges", [])
             nudges = []
