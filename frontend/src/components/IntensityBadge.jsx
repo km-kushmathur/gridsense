@@ -1,88 +1,104 @@
-export function IntensityBadge({ data, loading }) {
-  if (loading) {
+import { getStatusColor, getStatusLabel, getMoerColor } from '../constants';
+
+export function IntensityBadge({ data, loading, weather, forecast }) {
+  if (loading || !data) {
     return (
-      <div className="flex flex-col items-center gap-3 p-6">
-        <div className="skeleton w-20 h-20 rounded-full" />
-        <div className="skeleton w-24 h-4" />
+      <div style={{ padding: 14 }}>
+        <div className="skeleton" style={{ width: '100%', height: 16, marginBottom: 8 }} />
+        <div className="skeleton" style={{ width: 80, height: 40, marginBottom: 8 }} />
+        <div className="skeleton" style={{ width: '100%', height: 12, marginBottom: 16 }} />
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="skeleton" style={{ width: '100%', height: 12, marginBottom: 8 }} />
+        ))}
       </div>
     );
   }
 
-  if (!data) {
-    return (
-      <div className="flex flex-col items-center gap-3 p-6 text-gray-500">
-        <div className="w-20 h-20 rounded-full border-2 border-gray-700 flex items-center justify-center text-3xl">
-          —
-        </div>
-        <p className="text-sm">Enter a city to start</p>
-      </div>
-    );
+  const statusColor = getStatusColor(data);
+  const statusLabel = getStatusLabel(data);
+  const pctRenewable = Math.round(data.pct_renewable * 100);
+
+  // Find best window from forecast
+  let bestWindow = '—';
+  if (forecast?.length) {
+    let bestStart = null;
+    let lowestMoer = Infinity;
+    for (const point of forecast.slice(0, 24)) {
+      if (point.moer < lowestMoer) {
+        lowestMoer = point.moer;
+        bestStart = new Date(point.time);
+      }
+    }
+    if (bestStart) {
+      const h = bestStart.getHours();
+      const end = (h + 2) % 24;
+      const fmt = (hr) => {
+        if (hr === 0) return '12 am';
+        if (hr < 12) return `${hr} am`;
+        if (hr === 12) return '12 pm';
+        return `${hr - 12} pm`;
+      };
+      bestWindow = `${fmt(h)}–${fmt(end)}`;
+    }
   }
 
-  const statusColor = {
-    clean: 'text-grid-clean border-grid-clean bg-grid-clean/10',
-    moderate: 'text-grid-moderate border-grid-moderate bg-grid-moderate/10',
-    dirty: 'text-grid-dirty border-grid-dirty bg-grid-dirty/10',
-  }[data.status] || 'text-gray-400 border-gray-600 bg-gray-800';
+  // Heat wave risk
+  const heatWaveRisk = data.heat_wave ? 'High' : (data.temp_c > 30 ? 'Elevated' : 'Low');
+  const heatWaveColor = data.heat_wave ? '#EF4444' : (data.temp_c > 30 ? '#EAB308' : '#22C55E');
 
-  const statusEmoji = { clean: '🟢', moderate: '🟡', dirty: '🔴' }[data.status] || '⚪';
-  const dotColor = { clean: 'bg-grid-clean', moderate: 'bg-grid-moderate', dirty: 'bg-grid-dirty' }[data.status] || 'bg-gray-500';
+  const conditions = [
+    { label: 'Carbon intensity', value: `${Math.round(data.moer)} lbs/MWh`, color: getMoerColor(data.moer) },
+    { label: 'Grid stress', value: `${Math.round(data.grid_stress || 0)}%`, color: statusColor },
+    { label: 'Temperature', value: `${Math.round(data.temp_c)}°C`, color: '#D0D0CE' },
+    { label: 'Heat wave risk', value: heatWaveRisk, color: heatWaveColor },
+    { label: 'Best window today', value: bestWindow, color: '#22C55E' },
+  ];
 
   return (
-    <div className="flex flex-col items-center gap-4 p-6">
-      {/* Big MOER number */}
-      <div className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center ${statusColor}`}>
-        <span className="text-3xl font-bold">{Math.round(data.moer)}</span>
-        {/* Pulsing dot */}
-        <span className={`absolute -top-1 -right-1 w-4 h-4 rounded-full ${dotColor} animate-pulse-slow`} />
-      </div>
-
-      <p className="text-xs text-gray-400 tracking-wider uppercase">lbs CO₂/MWh</p>
-
-      {/* Status badge */}
-      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${statusColor}`}>
-        <span>{statusEmoji}</span>
-        <span className="capitalize">{data.status}</span>
-      </div>
-
-      {/* Green score bar */}
-      <div className="w-full">
-        <div className="flex justify-between text-xs text-gray-400 mb-1">
-          <span>Green Score</span>
-          <span>{Math.round(data.green_score)}/100</span>
-        </div>
-        <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-700 ease-out"
-            style={{
-              width: `${data.green_score}%`,
-              background: data.green_score > 60
-                ? '#22c55e'
-                : data.green_score > 30
-                  ? '#eab308'
-                  : '#ef4444',
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Renewable % */}
-      <p className="text-sm text-gray-300">
-        <span className="font-semibold text-white">{Math.round(data.pct_renewable * 100)}%</span> renewable
-      </p>
-
-      <p className="text-sm text-gray-300">
-        <span className="font-semibold text-white">{Math.round(data.temp_c)}C</span> current temp
-      </p>
-
-      {data.heat_wave && (
-        <p className="rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-red-300">
-          Heat Wave
+    <div style={{ padding: 14 }}>
+      {/* Status card */}
+      <div style={{
+        background: '#0F1117',
+        borderRadius: 10,
+        padding: 14,
+        border: '0.5px solid #1E2A1E',
+        marginBottom: 14,
+      }}>
+        <p style={{ fontSize: 11, color: '#555553', marginBottom: 8 }}>Grid cleanliness right now</p>
+        <p style={{ fontSize: 36, fontWeight: 500, color: statusColor, lineHeight: 1 }}>
+          {pctRenewable}%
         </p>
-      )}
+        <p style={{ fontSize: 11, color: statusColor, opacity: 0.6, marginTop: 4, marginBottom: 10 }}>
+          renewable energy on the grid
+        </p>
+        <span style={{
+          fontSize: 12,
+          fontWeight: 500,
+          color: statusColor,
+          background: `${statusColor}14`,
+          border: `0.5px solid ${statusColor}40`,
+          borderRadius: 10,
+          padding: '3px 8px',
+        }}>
+          {statusLabel}
+        </span>
+      </div>
 
-      {/* Region */}
-      <p className="text-xs text-gray-500 font-mono">{data.region}</p>
+      {/* Current conditions */}
+      <p style={{ fontSize: 11, color: '#444441', marginBottom: 8 }}>Current conditions</p>
+      {conditions.map((c, i) => (
+        <div
+          key={i}
+          className="flex items-center justify-between"
+          style={{
+            height: 28,
+            borderBottom: i < conditions.length - 1 ? '0.5px solid #1E1E1C' : 'none',
+          }}
+        >
+          <span style={{ fontSize: 12, color: '#666663' }}>{c.label}</span>
+          <span style={{ fontSize: 12, fontWeight: 500, color: c.color }}>{c.value}</span>
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,133 +1,114 @@
-import {
-  ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Line,
-} from 'recharts';
+import { getMoerColor } from '../constants';
 
-function getMoerColor(moer) {
-  if (moer < 400) return '#22c55e';
-  if (moer < 700) return '#eab308';
-  return '#ef4444';
-}
-
-function CustomTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  return (
-    <div className="bg-grid-surface border border-grid-border rounded-lg px-3 py-2 shadow-xl text-sm">
-      <p className="font-medium text-white">{d.label}</p>
-      <p className="text-gray-400">
-        MOER: <span className="font-mono font-semibold text-white">{Math.round(d.moer)}</span> lbs/MWh
-      </p>
-      <p className="text-gray-400">
-        Demand index: <span className="font-semibold text-white">{d.demandIndex.toFixed(2)}</span>
-      </p>
-      <p className="text-gray-400">Temp: <span className="font-semibold text-orange-300">{Math.round(d.tempC)}C</span></p>
-    </div>
-  );
+function formatHourLabel(hour) {
+  if (hour === 0) return '12a';
+  if (hour < 12) return `${hour}a`;
+  if (hour === 12) return '12p';
+  return `${hour - 12}p`;
 }
 
 export function ForecastChart({ forecast, loading }) {
   if (loading) {
     return (
-      <div className="p-4">
-        <div className="skeleton w-full h-[200px]" />
+      <div style={{ padding: '14px 16px' }}>
+        <div className="skeleton" style={{ width: '100%', height: 12, marginBottom: 12 }} />
+        <div className="flex gap-[3px]" style={{ height: 72 }}>
+          {[...Array(24)].map((_, i) => (
+            <div key={i} className="flex-1 skeleton" style={{ height: 20 + Math.random() * 48, alignSelf: 'flex-end', borderRadius: 2 }} />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (!forecast?.length) {
     return (
-      <div className="p-6 text-center text-gray-500 text-sm">
+      <div style={{ padding: '14px 16px', fontSize: 11, color: '#555553' }}>
         No forecast data yet
       </div>
     );
   }
 
-  // Process data: group by hour and label nicely
+  // Process to hourly, first 24 hours
   const now = new Date();
   const currentHour = now.getHours();
 
-  const chartData = forecast.slice(0, 48).map((point, i) => {
-    const date = new Date(point.time);
-    const hour = date.getHours();
-    const isPast = date < now;
-    return {
-      ...point,
-      hour,
-      tempC: point.temp_c,
-      demandIndex: point.demand_index,
-      label: `${hour === 0 ? '12' : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'pm' : 'am'}`,
-      isCurrent: hour === currentHour && !isPast,
-      index: i,
-    };
-  });
-
-  // De-duplicate to hourly (take first per hour)
   const hourly = [];
   const seenHours = new Set();
-  for (const d of chartData) {
-    const key = `${new Date(d.time).toDateString()}-${d.hour}`;
+  for (const point of forecast.slice(0, 48)) {
+    const date = new Date(point.time);
+    const hour = date.getHours();
+    const key = `${date.toDateString()}-${hour}`;
     if (!seenHours.has(key)) {
       seenHours.add(key);
-      hourly.push(d);
+      hourly.push({ ...point, hour });
     }
+    if (hourly.length >= 24) break;
   }
 
-  const currentIndex = hourly.findIndex((d) => d.isCurrent);
+  // Find max MOER for scaling bar heights by pct_renewable if available, else by inverse MOER
+  const maxMoer = Math.max(...hourly.map((p) => p.moer || 0), 1);
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
-          24h Forecast
-        </h3>
-        <div className="flex items-center gap-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400" /> Demand</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-grid-clean" /> MOER</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" /> Temp</span>
+    <div style={{ padding: '14px 16px' }}>
+      {/* Title */}
+      <p style={{ fontSize: 11, color: '#555553', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>
+        24-hour forecast — cleaner times to run appliances
+      </p>
+
+      {/* Bar chart */}
+      <div className="flex items-end gap-[3px]" style={{ height: 72 }}>
+        {hourly.map((point, i) => {
+          const moer = point.moer || 0;
+          const color = getMoerColor(moer);
+          // Height proportional to cleanness (inverse of moer)
+          const cleanRatio = 1 - (moer / (maxMoer * 1.2));
+          const barHeight = Math.max(4, cleanRatio * 68);
+          const isCurrent = point.hour === currentHour;
+
+          return (
+            <div key={i} className="flex-1 relative" style={{ height: '100%', display: 'flex', alignItems: 'flex-end' }}>
+              <div
+                style={{
+                  width: '100%',
+                  height: barHeight,
+                  background: color,
+                  borderRadius: '2px 2px 0 0',
+                  outline: isCurrent ? '1.5px solid #FFFFFF' : 'none',
+                  outlineOffset: isCurrent ? 1 : 0,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hour labels — every other bar */}
+      <div className="flex gap-[3px]" style={{ marginTop: 4 }}>
+        {hourly.map((point, i) => (
+          <div key={i} className="flex-1 text-center" style={{ fontSize: 9, color: '#444441' }}>
+            {i % 2 === 0 ? formatHourLabel(point.hour) : ''}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-3 mt-2">
+        {[
+          { color: '#22C55E', label: 'Clean' },
+          { color: '#EAB308', label: 'Moderate' },
+          { color: '#EF4444', label: 'Dirty — avoid' },
+        ].map((item) => (
+          <div key={item.label} className="flex items-center gap-1">
+            <div style={{ width: 8, height: 8, borderRadius: 1, background: item.color }} />
+            <span style={{ fontSize: 10, color: '#444441' }}>{item.label}</span>
+          </div>
+        ))}
+        <div className="ml-auto flex items-center gap-1">
+          <div style={{ width: 8, height: 8, borderRadius: 1, border: '1.5px solid #FFFFFF', background: 'transparent' }} />
+          <span style={{ fontSize: 10, color: '#444441' }}>Now</span>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={hourly.slice(0, 24)} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
-          <XAxis
-            dataKey="label"
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: '#6b7280', fontSize: 10 }}
-            interval={2}
-          />
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: '#6b7280', fontSize: 10 }}
-            width={32}
-            tickFormatter={(value) => value.toFixed(1)}
-          />
-          <YAxis
-            yAxisId="temp"
-            orientation="right"
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: '#fb923c', fontSize: 10 }}
-            width={28}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-          {currentIndex >= 0 && (
-            <ReferenceLine
-              x={hourly[currentIndex]?.label}
-              stroke="#818cf8"
-              strokeDasharray="3 3"
-              strokeWidth={1.5}
-              label={{ value: 'NOW', position: 'top', fill: '#818cf8', fontSize: 10 }}
-            />
-          )}
-          <Bar dataKey="demandIndex" barSize={12} fill="rgba(156,163,175,0.55)" radius={[3, 3, 0, 0]} />
-          <Line type="monotone" dataKey="moer" stroke="#22c55e" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-          <Line yAxisId="temp" type="monotone" dataKey="tempC" stroke="#fb923c" strokeWidth={2} dot={false} />
-        </ComposedChart>
-      </ResponsiveContainer>
-      <p className="mt-3 text-xs text-gray-500">
-        Grid stress is derived from demand index and MOER in the simulation layer.
-      </p>
     </div>
   );
 }

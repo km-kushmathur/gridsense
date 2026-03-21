@@ -17,11 +17,8 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(62, 242, 200, 0.12), transparent 28%),
-    radial-gradient(circle at top right, rgba(249, 115, 22, 0.12), transparent 26%),
-    linear-gradient(180deg, #071019 0%, #0b1220 38%, #050914 100%);
-  color: #e2e8f0;
+  background: #0F1117;
+  color: #D0D0CE;
 }
 
 #root {
@@ -33,7 +30,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.9);
+  background: #0F1117;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -41,9 +38,12 @@ body {
   border-radius: 999px;
 }
 
+/* Skeleton shimmer */
 .skeleton {
   position: relative;
   overflow: hidden;
+  background: #1A1D27;
+  border-radius: 6px;
 }
 
 .skeleton::after {
@@ -51,12 +51,43 @@ body {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
-  animation: shimmer 1.6s infinite;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  animation: shimmer 1.5s linear infinite;
 }
 
 @keyframes shimmer {
-  100% {
-    transform: translateX(100%);
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+/* Live pulse dot */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Map concentric circle pulse */
+@keyframes mapPulse {
+  0%, 100% { opacity: 0.18; }
+  50% { opacity: 0.35; }
+}
+
+/* Grid failure overlay fade in */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Status color transitions */
+.status-transition {
+  transition: color 0.3s, background-color 0.3s;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
