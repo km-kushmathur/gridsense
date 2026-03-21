@@ -1,8 +1,8 @@
 # GridSense Agent Rules
 
 ## Project
-Real-time grid carbon intensity dashboard. Backend is FastAPI Python.
-Frontend is React + Vite + Tailwind. No TypeScript — plain JS only.
+Real-time grid carbon dashboard + energy demand spike predictor.
+Backend: FastAPI Python. Frontend: React + Vite + Tailwind. No TypeScript.
 
 ## Code Style
 - Python: snake_case, type hints on all functions, docstrings on classes
@@ -12,7 +12,8 @@ Frontend is React + Vite + Tailwind. No TypeScript — plain JS only.
 
 ## API Keys
 All secrets come from environment variables. Never hardcode.
-Keys needed: WATTTIME_USER, WATTTIME_PASSWORD, AZURE_AI_ENDPOINT, AZURE_AI_KEY, AZURE_AI_MODEL, GOOGLE_MAPS_API_KEY
+Keys needed: WATTTIME_USER, WATTTIME_PASSWORD, OPENAI_API_KEY, GOOGLE_MAPS_API_KEY
+Open-Meteo requires no API key.
 
 ## WattTime Rules
 - Always use v3 API endpoints (not v2)
@@ -21,10 +22,12 @@ Keys needed: WATTTIME_USER, WATTTIME_PASSWORD, AZURE_AI_ENDPOINT, AZURE_AI_KEY, 
 - Production: use /v3/region-to-signal to get region from lat/lng
 
 ## Nudge Generation
-Use Claude Sonnet via Azure AI Foundry (azure-ai-inference SDK). Keep nudges under 40 words.
+Use OpenAI gpt-4.1-mini. Keep nudges under 40 words.
 Tone: friendly, specific, actionable. Always mention % renewable or MOER value.
 
 ## API Contract
-GET /api/intensity returns: {city, region, moer, pct_renewable, green_score (0-100), status ("clean"|"moderate"|"dirty")}
-GET /api/forecast returns: [{time: ISO string, moer: float, pct_renewable: float}]
-POST /api/nudges returns: [{appliance, emoji, best_time, co2_saved_grams, message}]
+GET /api/intensity returns: {city, region, moer, pct_renewable, green_score (0-100), status ("clean"|"moderate"|"dirty"), temp_c, heat_wave}
+GET /api/forecast returns: [{time: ISO string, moer: float, pct_renewable: float, temp_c: float, demand_index: float, grid_stress: float}]
+POST /api/nudges returns: {nudges: [{appliance, emoji, best_time, co2_saved_grams, message}]}
+POST /api/simulate returns: {scenario, city, timeline, shifted_timeline, failure_hour, savings_kg_co2}
+GET /api/weather returns: {temp_c, condition, heat_wave, forecast_highs}

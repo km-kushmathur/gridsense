@@ -1,32 +1,50 @@
 const API_BASE = '/api';
 
-async function request(path, init) {
-  const res = await fetch(`${API_BASE}${path}`, init);
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(detail || `Request failed: ${res.status}`);
+async function parseResponse(res, fallbackMessage) {
+  if (res.ok) {
+    return res.json();
   }
-  return res.json();
+
+  let detail = '';
+  try {
+    const data = await res.json();
+    detail = data.detail || '';
+  } catch {
+    detail = '';
+  }
+
+  throw new Error(detail || `${fallbackMessage}: ${res.status}`);
 }
 
-export function fetchSites() {
-  return request('/sites');
+export async function fetchIntensity(city) {
+  const res = await fetch(`${API_BASE}/intensity?city=${encodeURIComponent(city)}`);
+  return parseResponse(res, 'Failed to fetch intensity');
 }
 
-export function fetchWeather(siteId, weatherScenario) {
-  return request(`/weather?site_id=${encodeURIComponent(siteId)}&weather_scenario=${encodeURIComponent(weatherScenario)}`);
+export async function fetchForecast(city) {
+  const res = await fetch(`${API_BASE}/forecast?city=${encodeURIComponent(city)}`);
+  return parseResponse(res, 'Failed to fetch forecast');
 }
 
-export function fetchEnvironment(siteId, weatherScenario) {
-  return request(`/environment?site_id=${encodeURIComponent(siteId)}&weather_scenario=${encodeURIComponent(weatherScenario)}`);
+export async function fetchWeather(city) {
+  const res = await fetch(`${API_BASE}/weather?city=${encodeURIComponent(city)}`);
+  return parseResponse(res, 'Failed to fetch weather');
 }
 
-export function fetchScenario(siteId, weatherScenario, scenario) {
-  return request(
-    `/demand-forecast?site_id=${encodeURIComponent(siteId)}&weather_scenario=${encodeURIComponent(weatherScenario)}&scenario=${encodeURIComponent(scenario)}`
-  );
+export async function fetchNudges(city) {
+  const res = await fetch(`${API_BASE}/nudges`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ city }),
+  });
+  return parseResponse(res, 'Failed to fetch nudges');
 }
 
-export function fetchActions(siteId, weatherScenario) {
-  return request(`/actions?site_id=${encodeURIComponent(siteId)}&weather_scenario=${encodeURIComponent(weatherScenario)}`);
+export async function fetchSimulation(city, scenario) {
+  const res = await fetch(`${API_BASE}/simulate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ city, scenario }),
+  });
+  return parseResponse(res, 'Failed to fetch simulation');
 }

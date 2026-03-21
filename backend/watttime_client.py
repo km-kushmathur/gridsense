@@ -6,6 +6,13 @@ from datetime import datetime, timezone
 
 import httpx
 
+try:
+    from .mock_data import MOCK_REGION, get_mock_forecast, get_mock_realtime
+    from .settings import use_mock_data
+except ImportError:
+    from mock_data import MOCK_REGION, get_mock_forecast, get_mock_realtime
+    from settings import use_mock_data
+
 # Cache TTL in seconds
 CACHE_TTL = 300  # 5 minutes
 TOKEN_TTL = 1500  # 25 minutes (tokens expire at 30)
@@ -28,20 +35,28 @@ class WattTimeClient:
 
     async def _ensure_token(self) -> str:
         """Authenticate or refresh the JWT token if it's expired."""
+        if use_mock_data():
+            return "mock-token"
+
         if self._token and (time.time() - self._token_ts) < TOKEN_TTL:
             return self._token
 
-        username = os.getenv("WATTTIME_USER", "")
-        password = os.getenv("WATTTIME_PASSWORD", "")
+        username = os.getenv("WATTTIME_USER", "").strip()
+        password = os.getenv("WATTTIME_PASSWORD", "").strip()
+        if not username or not password:
+            raise RuntimeError("WATTTIME_USER and WATTTIME_PASSWORD must be configured.")
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{BASE_URL}/login",
-                auth=(username, password),
-                timeout=10.0,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{BASE_URL}/login",
+                    auth=(username, password),
+                    timeout=10.0,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPError as exc:
+            raise RuntimeError("WattTime authentication failed.") from exc
 
         self._token = data["token"]
         self._token_ts = time.time()
@@ -52,19 +67,8 @@ class WattTimeClient:
         token = await self._ensure_token()
         headers = {"Authorization": f"Bearer {token}"}
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{BASE_URL}{path}",
-                headers=headers,
-                params=params or {},
-                timeout=15.0,
-            )
-
-            # If 401, re-auth and retry once
-            if resp.status_code == 401:
-                self._token = None
-                token = await self._ensure_token()
-                headers = {"Authorization": f"Bearer {token}"}
+        try:
+            async with httpx.AsyncClient() as client:
                 resp = await client.get(
                     f"{BASE_URL}{path}",
                     headers=headers,
@@ -72,14 +76,30 @@ class WattTimeClient:
                     timeout=15.0,
                 )
 
-            resp.raise_for_status()
-            return resp.json()
+                if resp.status_code == 401:
+                    self._token = None
+                    token = await self._ensure_token()
+                    headers = {"Authorization": f"Bearer {token}"}
+                    resp = await client.get(
+                        f"{BASE_URL}{path}",
+                        headers=headers,
+                        params=params or {},
+                        timeout=15.0,
+                    )
+
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPError as exc:
+            raise RuntimeError("WattTime data service is unavailable.") from exc
 
     async def get_region(self, lat: float, lng: float) -> str:
         """Look up the WattTime balancing authority region for coordinates.
 
         Falls back to CAISO_NORTH on error (free tier default).
         """
+        if use_mock_data():
+            return MOCK_REGION
+
         try:
             data = await self._authed_get(
                 "/v3/region-from-loc",
@@ -89,9 +109,9 @@ class WattTimeClient:
                     "signal_type": "co2_moer",
                 },
             )
-            return data.get("region", "CAISO_NORTH")
+            return data.get("region", MOCK_REGION)
         except Exception:
-            return "CAISO_NORTH"
+            return MOCK_REGION
 
     async def get_realtime(self, region: str) -> dict:
         """Get real-time MOER data for a region.
@@ -99,6 +119,9 @@ class WattTimeClient:
         Returns:
             {moer, pct_renewable, green_score} where green_score is 0-100.
         """
+        if use_mock_data():
+            return get_mock_realtime(region)
+
         # Check cache
         cached = self._realtime_cache.get(region)
         if cached and (time.time() - cached[0]) < CACHE_TTL:
@@ -142,6 +165,9 @@ class WattTimeClient:
         Returns:
             List of {time, moer, pct_renewable} dicts.
         """
+        if use_mock_data():
+            return get_mock_forecast(region)
+
         # Check cache
         cached = self._forecast_cache.get(region)
         if cached and (time.time() - cached[0]) < CACHE_TTL:

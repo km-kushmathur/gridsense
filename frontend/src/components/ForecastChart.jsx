@@ -1,94 +1,133 @@
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+  ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Line,
 } from 'recharts';
 
-function CustomTooltip({ active, payload, label }) {
+function getMoerColor(moer) {
+  if (moer < 400) return '#22c55e';
+  if (moer < 700) return '#eab308';
+  return '#ef4444';
+}
+
+function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/95 px-4 py-3 text-sm shadow-2xl">
-      <p className="font-semibold text-white">{label}</p>
-      {payload.map((entry) => (
-        <p key={entry.dataKey} className="mt-1 text-slate-300">
-          <span className="font-medium" style={{ color: entry.color }}>{entry.name}:</span> {entry.value}
-        </p>
-      ))}
+    <div className="bg-grid-surface border border-grid-border rounded-lg px-3 py-2 shadow-xl text-sm">
+      <p className="font-medium text-white">{d.label}</p>
+      <p className="text-gray-400">
+        MOER: <span className="font-mono font-semibold text-white">{Math.round(d.moer)}</span> lbs/MWh
+      </p>
+      <p className="text-gray-400">
+        Demand index: <span className="font-semibold text-white">{d.demandIndex.toFixed(2)}</span>
+      </p>
+      <p className="text-gray-400">Temp: <span className="font-semibold text-orange-300">{Math.round(d.tempC)}C</span></p>
     </div>
   );
 }
 
-export function ForecastChart({ baseline, optimized, weather, loading }) {
-  if (loading || !baseline || !optimized || !weather?.length) {
-    return <div className="min-h-[380px] rounded-[28px] border border-grid-border bg-white/5 skeleton" />;
+export function ForecastChart({ forecast, loading }) {
+  if (loading) {
+    return (
+      <div className="p-4">
+        <div className="skeleton w-full h-[200px]" />
+      </div>
+    );
   }
 
-  const chartData = baseline.forecast.map((point, index) => ({
-    label: point.local_label,
-    baselineStress: point.stress_score,
-    optimizedStress: optimized.forecast[index]?.stress_score || point.stress_score,
-    failureRisk: point.failure_risk_pct,
-    temp: Math.round(weather[index]?.temperature_f || 0),
-  }));
+  if (!forecast?.length) {
+    return (
+      <div className="p-6 text-center text-gray-500 text-sm">
+        No forecast data yet
+      </div>
+    );
+  }
+
+  // Process data: group by hour and label nicely
+  const now = new Date();
+  const currentHour = now.getHours();
+
+  const chartData = forecast.slice(0, 48).map((point, i) => {
+    const date = new Date(point.time);
+    const hour = date.getHours();
+    const isPast = date < now;
+    return {
+      ...point,
+      hour,
+      tempC: point.temp_c,
+      demandIndex: point.demand_index,
+      label: `${hour === 0 ? '12' : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'pm' : 'am'}`,
+      isCurrent: hour === currentHour && !isPast,
+      index: i,
+    };
+  });
+
+  // De-duplicate to hourly (take first per hour)
+  const hourly = [];
+  const seenHours = new Set();
+  for (const d of chartData) {
+    const key = `${new Date(d.time).toDateString()}-${d.hour}`;
+    if (!seenHours.has(key)) {
+      seenHours.add(key);
+      hourly.push(d);
+    }
+  }
+
+  const currentIndex = hourly.findIndex((d) => d.isCurrent);
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-grid-border bg-grid-panel shadow-grid-panel">
-      <div className="border-b border-white/10 px-5 py-4">
-        <p className="text-[11px] uppercase tracking-[0.24em] text-grid-amber">Risk Timeline</p>
-        <h2 className="mt-2 font-display text-3xl text-white">Baseline vs optimized operating posture</h2>
-        <p className="mt-1 text-sm text-slate-300">
-          Stress rises when weather pushes demand up or reduces local generation. The optimized line shows how load controls change the same window.
-        </p>
-      </div>
-
-      <div className="p-4">
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={chartData} margin={{ top: 10, right: 12, left: -12, bottom: 0 }}>
-            <defs>
-              <linearGradient id="baselineFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="5%" stopColor="#f97316" stopOpacity={0.55} />
-                <stop offset="95%" stopColor="#f97316" stopOpacity={0.04} />
-              </linearGradient>
-              <linearGradient id="optimizedFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="5%" stopColor="#3ef2c8" stopOpacity={0.45} />
-                <stop offset="95%" stopColor="#3ef2c8" stopOpacity={0.03} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-            <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} interval={2} />
-            <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ color: '#e2e8f0', fontSize: '12px' }} />
-            <Area type="monotone" dataKey="baselineStress" name="Baseline stress" stroke="#f97316" fill="url(#baselineFill)" strokeWidth={2} />
-            <Area type="monotone" dataKey="optimizedStress" name="Optimized stress" stroke="#3ef2c8" fill="url(#optimizedFill)" strokeWidth={2} />
-            <Area type="monotone" dataKey="failureRisk" name="Failure risk %" stroke="#f43f5e" fill="transparent" strokeDasharray="6 4" strokeWidth={1.6} />
-          </AreaChart>
-        </ResponsiveContainer>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Baseline Summary</p>
-            <p className="mt-2 text-sm leading-6 text-slate-300">{baseline.summary}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Peak Window</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{baseline.peak_window}</p>
-            <p className="mt-1 text-sm text-slate-300">{baseline.failure_risk_hours} hours at failure-risk in baseline mode.</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Optimization Outcome</p>
-            <p className="mt-2 text-2xl font-semibold text-grid-mint">{Math.round(optimized.avoided_peak_kw)} kW</p>
-            <p className="mt-1 text-sm text-slate-300">
-              Peak shed, {Math.round(optimized.load_shifted_kwh)} kWh shifted, {optimized.avoided_emissions_kg} kg avoided emissions.
-            </p>
-          </div>
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
+          24h Forecast
+        </h3>
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400" /> Demand</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-grid-clean" /> MOER</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" /> Temp</span>
         </div>
       </div>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={hourly.slice(0, 24)} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+          <XAxis
+            dataKey="label"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: '#6b7280', fontSize: 10 }}
+            interval={2}
+          />
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: '#6b7280', fontSize: 10 }}
+            width={32}
+            tickFormatter={(value) => value.toFixed(1)}
+          />
+          <YAxis
+            yAxisId="temp"
+            orientation="right"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: '#fb923c', fontSize: 10 }}
+            width={28}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          {currentIndex >= 0 && (
+            <ReferenceLine
+              x={hourly[currentIndex]?.label}
+              stroke="#818cf8"
+              strokeDasharray="3 3"
+              strokeWidth={1.5}
+              label={{ value: 'NOW', position: 'top', fill: '#818cf8', fontSize: 10 }}
+            />
+          )}
+          <Bar dataKey="demandIndex" barSize={12} fill="rgba(156,163,175,0.55)" radius={[3, 3, 0, 0]} />
+          <Line type="monotone" dataKey="moer" stroke="#22c55e" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+          <Line yAxisId="temp" type="monotone" dataKey="tempC" stroke="#fb923c" strokeWidth={2} dot={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <p className="mt-3 text-xs text-gray-500">
+        Grid stress is derived from demand index and MOER in the simulation layer.
+      </p>
     </div>
   );
 }

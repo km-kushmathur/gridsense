@@ -1,10 +1,12 @@
-"""Claude-powered appliance nudge generation engine (Azure AI Foundry)."""
+"""OpenAI-powered appliance nudge generation engine."""
 
 import json
 import os
 
-from azure.ai.inference import ChatCompletionsClient
-from azure.core.credentials import AzureKeyCredential
+try:
+    from .settings import use_mock_data
+except ImportError:
+    from settings import use_mock_data
 
 # kWh per typical cycle for each appliance
 APPLIANCE_KWH: dict[str, float] = {
@@ -21,35 +23,27 @@ APPLIANCE_EMOJI: dict[str, str] = {
     "dryer": "👖",
 }
 
-SYSTEM_PROMPT = """You are GridSense, a friendly neighborhood energy advisor.
-Given real-time grid carbon data, generate specific, encouraging nudges
-for home appliances. Be conversational, never preachy.
-Always give a specific time (e.g. "tonight at 11pm") and a concrete saving.
-Keep each nudge under 35 words.
-
-You MUST respond with ONLY a valid JSON array of 4 objects, each with these exact keys:
-- "appliance": string (one of: dishwasher, washer, ev_charger, dryer)
-- "best_time": string (a specific human-readable time like "tonight at 11pm")
-- "message": string (the nudge text, under 35 words)
-
-Example:
-[
-  {"appliance": "dishwasher", "best_time": "tonight at 11pm", "message": "Your grid will be 78% renewable at 11pm — perfect time to run the dishwasher and save 218g of CO₂!"},
-  {"appliance": "washer", "best_time": "tomorrow at 6am", "message": "Early bird gets clean clothes! 82% renewable power at 6am means your wash is nearly carbon-free."},
-  {"appliance": "ev_charger", "best_time": "tonight at 2am", "message": "Plug in at 2am for peak renewables — you'll save over 1.4kg of CO₂ on a full charge."},
-  {"appliance": "dryer", "best_time": "tomorrow at 1pm", "message": "Solar surge at 1pm! Run your dryer when the grid is greenest and save 630g of CO₂."}
-]"""
+SYSTEM_PROMPT = """You are GridSense, a friendly energy advisor for college campuses,
+apartment buildings, and small towns. Return JSON {nudges: [...]} with exactly
+4 items. Each: {appliance, emoji, best_time, co2_saved_grams, message}.
+Message under 35 words. Mention specific time. Friendly not preachy.
+Always include one EV charger nudge."""
 
 
 class NudgeEngine:
-    """Generates appliance nudge messages using Claude on Azure AI Foundry."""
+    """Generates appliance nudge messages using OpenAI."""
 
     def __init__(self) -> None:
-        self._client = ChatCompletionsClient(
-            endpoint=os.getenv("AZURE_AI_ENDPOINT", ""),
-            credential=AzureKeyCredential(os.getenv("AZURE_AI_KEY", "")),
-        )
-        self._model = os.getenv("AZURE_AI_MODEL", "claude-sonnet-4-20250514")
+        self._client = None
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if api_key:
+            try:
+                from openai import OpenAI
+            except ImportError:
+                self._client = None
+            else:
+                self._client = OpenAI(api_key=api_key)
+        self._model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
 
     def _find_cleanest_windows(
         self, forecast: list[dict], n: int = 3
@@ -69,21 +63,45 @@ class NudgeEngine:
         moer_diff = max(0, current_moer - best_moer)
         return round(kwh * moer_diff * 453.592 / 1000, 1)
 
+    def _build_fallback_nudges(
+        self,
+        forecast: list[dict],
+        current_moer: float,
+        current_weather: dict | None = None,
+    ) -> list[dict]:
+        """Build deterministic nudges when AI is unavailable."""
+        cleanest = self._find_cleanest_windows(forecast, n=len(APPLIANCE_KWH))
+        fallback_windows = cleanest or [{"time": "later tonight", "moer": current_moer, "pct_renewable": 0.5}]
+        nudges: list[dict] = []
+        appliances = list(APPLIANCE_KWH.keys())
+        temp_c = round(float((current_weather or {}).get("temp_c", 24.0)))
+
+        for index, appliance in enumerate(appliances):
+            window = fallback_windows[index % len(fallback_windows)]
+            best_time = str(window.get("time", "later tonight"))
+            best_moer = float(window.get("moer", current_moer))
+            pct_renewable = round(float(window.get("pct_renewable", 0.5)) * 100)
+            nudges.append({
+                "appliance": appliance,
+                "emoji": APPLIANCE_EMOJI[appliance],
+                "best_time": best_time,
+                "co2_saved_grams": self._calculate_co2_saved(appliance, current_moer, best_moer),
+                "message": (
+                    f"Run your {appliance.replace('_', ' ')} at {best_time} "
+                    f"when the grid is about {pct_renewable}% renewable and {temp_c}C."
+                ),
+            })
+
+        return nudges
+
     async def generate_nudges(
         self,
         forecast: list[dict],
         city: str,
+        current_weather: dict,
         current_moer: float = 500.0,
     ) -> list[dict]:
         """Generate 4 appliance nudge recommendations.
-
-        Args:
-            forecast: List of {time, moer, pct_renewable} dicts for next 24 hours.
-            city: Name of the city.
-            current_moer: Current MOER value for CO₂ savings calculation.
-
-        Returns:
-            List of 4 nudge dicts matching NudgeItem schema.
         """
         cleanest = self._find_cleanest_windows(forecast)
         cleanest_summary = "\n".join(
@@ -94,63 +112,49 @@ class NudgeEngine:
 
         user_prompt = (
             f"City: {city}\n"
+            f"Current temperature: {current_weather.get('temp_c', 0)}C\n"
+            f"Heat wave: {current_weather.get('heat_wave', False)}\n"
             f"Current MOER: {current_moer} lbs CO₂/MWh\n\n"
             f"The 3 cleanest windows in the next 24 hours:\n{cleanest_summary}\n\n"
             f"Generate nudges for these 4 appliances: dishwasher (1.2 kWh), "
             f"washer (0.5 kWh), EV charger (7.2 kWh), dryer (3.5 kWh).\n"
-            f"Respond with ONLY the JSON array."
+            f"Respond with JSON {{\"nudges\": [...]}} only."
         )
 
         try:
-            response = self._client.complete(
+            if use_mock_data() or self._client is None or not self._model:
+                return self._build_fallback_nudges(forecast, current_moer, current_weather)
+
+            response = self._client.chat.completions.create(
                 model=self._model,
-                max_tokens=600,
+                response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
             )
 
-            raw_text = response.choices[0].message.content.strip()
-
-            # Extract JSON from the response (handle markdown code blocks)
-            if "```" in raw_text:
-                raw_text = raw_text.split("```")[1]
-                if raw_text.startswith("json"):
-                    raw_text = raw_text[4:]
-                raw_text = raw_text.strip()
-
-            nudges_raw = json.loads(raw_text)
-
-            # Enrich with emoji and CO₂ savings
-            best_moer = cleanest[0].get("moer", current_moer) if cleanest else current_moer
+            raw_text = response.choices[0].message.content or "{}"
+            payload = json.loads(raw_text)
+            nudges_raw = payload.get("nudges", [])
             nudges = []
             for nudge in nudges_raw:
                 appliance = nudge.get("appliance", "dishwasher")
+                best_match = next(
+                    (window for window in cleanest if window.get("time") == nudge.get("best_time")),
+                    cleanest[0] if cleanest else {"moer": current_moer},
+                )
                 nudges.append({
                     "appliance": appliance,
                     "emoji": APPLIANCE_EMOJI.get(appliance, "⚡"),
                     "best_time": nudge.get("best_time", ""),
                     "co2_saved_grams": self._calculate_co2_saved(
-                        appliance, current_moer, best_moer
+                        appliance, current_moer, float(best_match.get("moer", current_moer))
                     ),
                     "message": nudge.get("message", ""),
                 })
 
             return nudges
 
-        except Exception as exc:
-            # Fallback nudges if Claude API fails
-            best_moer = cleanest[0].get("moer", current_moer) if cleanest else current_moer
-            best_time = cleanest[0].get("time", "later tonight") if cleanest else "later tonight"
-            return [
-                {
-                    "appliance": app,
-                    "emoji": APPLIANCE_EMOJI[app],
-                    "best_time": best_time,
-                    "co2_saved_grams": self._calculate_co2_saved(app, current_moer, best_moer),
-                    "message": f"Run your {app.replace('_', ' ')} at {best_time} "
-                               f"for a cleaner grid. (AI unavailable: {exc})",
-                }
-                for app in APPLIANCE_KWH
-            ]
+        except Exception:
+            return self._build_fallback_nudges(forecast, current_moer, current_weather)

@@ -1,6 +1,6 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 httpx==0.28.1
-azure-ai-inference==1.0.0b9
+openai==1.68.2
 python-dotenv==1.0.1
 pydantic==2.10.4
