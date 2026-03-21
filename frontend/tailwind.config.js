@@ -8,19 +8,19 @@ export default {
     extend: {
       colors: {
         grid: {
-          bg: '#0f1117',
-          surface: '#1a1d27',
-          border: '#2a2d3a',
-          clean: '#22c55e',
-          moderate: '#eab308',
-          dirty: '#ef4444',
+          bg: '#050914',
+          panel: 'rgba(10, 17, 30, 0.82)',
+          border: 'rgba(148, 163, 184, 0.16)',
+          mint: '#3ef2c8',
+          amber: '#f9b24b',
         },
       },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+      boxShadow: {
+        'grid-panel': '0 20px 60px rgba(0, 0, 0, 0.32)',
       },
-      animation: {
-        'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      fontFamily: {
+        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        display: ['"Space Grotesk"', '"IBM Plex Sans"', 'system-ui', 'sans-serif'],
       },
     },
   },

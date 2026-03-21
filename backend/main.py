@@ -1,43 +1,46 @@
-"""GridSense FastAPI backend — real-time carbon intensity + nudge engine."""
+"""GridSense backend for site-based weather-driven grid stress simulation."""
 
-import time
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from geo_utils import geocode_city
-from models import ForecastPoint, IntensityResponse, NudgeItem, NudgeRequest
-from nudge_engine import NudgeEngine
-from watttime_client import WattTimeClient
+from models import (
+    EnvironmentSummary,
+    OptimizationAction,
+    ScenarioResult,
+    SimulationRequest,
+    SiteProfile,
+    WeatherScenarioSlug,
+    WeatherSnapshot,
+)
+from simulation_engine import SimulationEngine
+from site_profiles import SITE_PROFILES, get_site, list_sites
+from weather_service import WeatherService
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional in minimal runtime checks
+    def load_dotenv() -> bool:
+        return False
+
 
 load_dotenv()
 
-# Singletons
-watttime = WattTimeClient()
-nudge_engine = NudgeEngine()
-
-# Simple in-memory cache: {city: (timestamp, data)}
-_intensity_cache: dict[str, tuple[float, dict]] = {}
-_forecast_cache: dict[str, tuple[float, list[dict]]] = {}
-CACHE_TTL = 300  # 5 minutes
+weather_service = WeatherService()
+simulation_engine = SimulationEngine()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Warm up the WattTime auth token on startup."""
-    try:
-        await watttime._ensure_token()
-    except Exception:
-        pass  # Token will be fetched on first request
+    """No-op lifespan hook for future cache warmup."""
     yield
 
 
 app = FastAPI(
     title="GridSense API",
-    description="Real-time neighborhood carbon intensity + smart appliance nudges",
-    version="0.1.0",
+    description="Weather-driven grid stress simulator for campuses and distributed energy planning.",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -50,92 +53,89 @@ app.add_middleware(
 )
 
 
+def _require_site(site_id: str) -> SiteProfile:
+    """Resolve a known site or raise a 404."""
+    if site_id not in SITE_PROFILES:
+        raise HTTPException(status_code=404, detail=f"Unknown site: {site_id}")
+    return get_site(site_id)
+
+
 @app.get("/api/health")
 async def health() -> dict:
     """Health check endpoint."""
     return {"status": "ok"}
 
 
-@app.get("/api/intensity", response_model=IntensityResponse)
-async def get_intensity(city: str = Query(..., description="City name to look up")) -> IntensityResponse:
-    """Get real-time carbon intensity for a city.
-
-    Geocodes the city, resolves the WattTime region, and returns
-    the current MOER value with a normalized green score.
-    """
-    # Check cache
-    cached = _intensity_cache.get(city.lower())
-    if cached and (time.time() - cached[0]) < CACHE_TTL:
-        return IntensityResponse(**cached[1])
-
-    try:
-        lat, lng = await geocode_city(city)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-    region = await watttime.get_region(lat, lng)
-    realtime = await watttime.get_realtime(region)
-
-    green_score = realtime.get("green_score", 50)
-    if green_score > 60:
-        status = "clean"
-    elif green_score > 30:
-        status = "moderate"
-    else:
-        status = "dirty"
-
-    result = {
-        "city": city,
-        "region": region,
-        "moer": realtime.get("moer", 0),
-        "pct_renewable": realtime.get("pct_renewable", 0),
-        "green_score": green_score,
-        "status": status,
-    }
-
-    _intensity_cache[city.lower()] = (time.time(), result)
-    return IntensityResponse(**result)
+@app.get("/api/sites", response_model=list[SiteProfile])
+async def get_sites() -> list[SiteProfile]:
+    """List supported demo sites."""
+    return list_sites()
 
 
-@app.get("/api/forecast", response_model=list[ForecastPoint])
-async def get_forecast(city: str = Query(..., description="City name to look up")) -> list[ForecastPoint]:
-    """Get 24-hour carbon intensity forecast for a city."""
-    # Check cache
-    cached = _forecast_cache.get(city.lower())
-    if cached and (time.time() - cached[0]) < CACHE_TTL:
-        return [ForecastPoint(**p) for p in cached[1]]
-
-    try:
-        lat, lng = await geocode_city(city)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-    region = await watttime.get_region(lat, lng)
-    forecast = await watttime.get_forecast(region)
-
-    _forecast_cache[city.lower()] = (time.time(), forecast)
-    return [ForecastPoint(**p) for p in forecast]
+@app.get("/api/site-lookup", response_model=list[SiteProfile])
+async def site_lookup(q: str = Query(..., min_length=2, description="Search query")) -> list[SiteProfile]:
+    """Search demo sites by name or city."""
+    query = q.lower().strip()
+    results = [
+        site
+        for site in list_sites()
+        if query in site.name.lower() or query in site.city.lower() or query in site.summary.lower()
+    ]
+    return results[:5]
 
 
-@app.post("/api/nudges", response_model=list[NudgeItem])
-async def get_nudges(body: NudgeRequest) -> list[NudgeItem]:
-    """Generate smart appliance nudges for a city based on forecast data."""
-    try:
-        lat, lng = await geocode_city(body.city)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+@app.get("/api/weather", response_model=list[WeatherSnapshot])
+async def get_weather(
+    site_id: str = Query(..., description="Demo site id"),
+    weather_scenario: WeatherScenarioSlug = Query("heat_wave", description="Weather scenario preset"),
+) -> list[WeatherSnapshot]:
+    """Return hourly weather for a demo site and scenario."""
+    _require_site(site_id)
+    return weather_service.get_weather(site_id, weather_scenario)
 
-    region = await watttime.get_region(lat, lng)
-    realtime = await watttime.get_realtime(region)
-    forecast = await watttime.get_forecast(region)
 
-    nudges = await nudge_engine.generate_nudges(
-        forecast=forecast,
-        city=body.city,
-        current_moer=realtime.get("moer", 500),
+@app.get("/api/environment", response_model=EnvironmentSummary)
+async def get_environment(
+    site_id: str = Query(..., description="Demo site id"),
+    weather_scenario: WeatherScenarioSlug = Query("heat_wave", description="Weather scenario preset"),
+) -> EnvironmentSummary:
+    """Return environment overlays for a demo site and scenario."""
+    _require_site(site_id)
+    return weather_service.get_environment(site_id, weather_scenario)
+
+
+@app.get("/api/demand-forecast", response_model=ScenarioResult)
+async def get_demand_forecast(
+    site_id: str = Query(..., description="Demo site id"),
+    weather_scenario: WeatherScenarioSlug = Query("heat_wave", description="Weather scenario preset"),
+    scenario: str = Query("baseline", pattern="^(baseline|optimized)$"),
+) -> ScenarioResult:
+    """Return a full simulation result for the requested site and operating mode."""
+    _require_site(site_id)
+    return simulation_engine.run(site_id, weather_scenario, scenario)
+
+
+@app.get("/api/actions", response_model=list[OptimizationAction])
+async def get_actions(
+    site_id: str = Query(..., description="Demo site id"),
+    weather_scenario: WeatherScenarioSlug = Query("heat_wave", description="Weather scenario preset"),
+) -> list[OptimizationAction]:
+    """Return ranked optimization actions for the site and weather scenario."""
+    _require_site(site_id)
+    result = simulation_engine.run(site_id, weather_scenario, "optimized")
+    return result.active_actions
+
+
+@app.post("/api/simulate", response_model=ScenarioResult)
+async def simulate(body: SimulationRequest) -> ScenarioResult:
+    """Run a baseline or optimized simulation with optional action filtering."""
+    _require_site(body.site_id)
+    return simulation_engine.run(
+        site_id=body.site_id,
+        weather_scenario=body.weather_scenario,
+        scenario=body.scenario,
+        enabled_action_ids=body.enabled_action_ids,
     )
-
-    return [NudgeItem(**n) for n in nudges]
 
 
 if __name__ == "__main__":
