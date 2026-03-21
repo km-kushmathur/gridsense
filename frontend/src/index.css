@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Base ---- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0f1117;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1d27;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2d3a;
+  border-radius: 3px;
+}
+
+/* ---- Map pulse ring ---- */
+@keyframes map-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.04); }
+}
+.map-pulse {
+  animation: map-pulse 2s ease-in-out infinite;
+}
+
+/* ---- Skeleton shimmer ---- */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #1a1d27 25%, #2a2d3a 50%, #1a1d27 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ---- Leaflet overrides ---- */
+.leaflet-container {
+  background: #0f1117 !important;
+  border-radius: 12px;
+}
+.leaflet-control-attribution {
+  display: none !important;
+}
