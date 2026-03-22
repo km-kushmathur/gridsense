@@ -5,6 +5,7 @@ import { AnimatedContent } from './ui/AnimatedContent';
 import { DetailDisclosure } from './ui/DetailDisclosure';
 import { SpotlightCard } from './ui/SpotlightCard';
 import { StarBorder } from './ui/StarBorder';
+import { formatHourFromValue, formatWindowRange } from '../utils/time';
 
 const APPLIANCE_ORDER = ['ev_charger', 'dishwasher', 'dryer', 'washer'];
 
@@ -39,17 +40,17 @@ function sortNudges(nudges) {
   });
 }
 
-function formatBestTime(bestTime) {
-  if (!bestTime) return 'Timing unavailable';
-  const parsed = new Date(bestTime);
-  if (Number.isNaN(parsed.getTime())) {
-    return bestTime;
+function formatBestWindow(nudge) {
+  if (nudge?.best_window_start && nudge?.best_window_end) {
+    return formatWindowRange(nudge.best_window_start, nudge.best_window_end, 'Window unavailable');
   }
-
-  return parsed.toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  if (nudge?.best_window_label) {
+    return nudge.best_window_label;
+  }
+  if (nudge?.best_time) {
+    return formatHourFromValue(nudge.best_time, nudge.best_time);
+  }
+  return 'Window unavailable';
 }
 
 export function NudgePanel({ city }) {
@@ -127,30 +128,30 @@ export function NudgePanel({ city }) {
 
             return (
               <AnimatedContent key={`${nudge.appliance}-${index}`} delay={90 * index}>
-                <SpotlightCard className="card-solid hover-lift h-full overflow-hidden border border-white/10 p-5">
+                <SpotlightCard className="card-solid hover-lift h-full overflow-hidden border border-white/10 p-4 sm:p-5">
                   <div
                     className="absolute inset-y-4 left-0 w-1 rounded-r-full"
                     style={{ background: meta.color }}
                   />
 
-                  <div className="relative flex h-full flex-col">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                  <div className="relative flex h-full min-h-[260px] flex-col gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div
-                          className="flex h-12 w-12 items-center justify-center rounded-2xl text-xl"
+                          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-lg"
                           style={{ background: `${meta.color}18`, color: meta.color }}
                         >
                           <span>{nudge.emoji || meta.icon}</span>
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Appliance</p>
-                          <p className="mt-1 text-lg font-semibold text-white">{meta.label}</p>
+                          <p className="mt-1 text-base font-semibold text-white sm:text-lg">{meta.label}</p>
                         </div>
                       </div>
 
                       <span
-                        className="rounded-full border px-3 py-1 text-xs font-semibold"
+                        className="rounded-full border px-3 py-1 text-[11px] font-semibold"
                         style={{
                           color: meta.color,
                           borderColor: `${meta.color}44`,
@@ -161,14 +162,14 @@ export function NudgePanel({ city }) {
                       </span>
                     </div>
 
-                    <div className="mt-6">
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Best time</p>
-                      <p className="mt-2 font-display text-3xl font-semibold text-grid-clean">
-                        {formatBestTime(nudge.best_time)}
+                    <div className="rounded-[24px] border border-white/8 bg-black/20 px-4 py-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Best window</p>
+                      <p className="mt-2 font-display text-[1.65rem] font-semibold leading-tight text-grid-clean sm:text-[1.9rem]">
+                        {formatBestWindow(nudge)}
                       </p>
                     </div>
 
-                    <p className="mt-5 text-sm leading-7 text-slate-300">{nudge.message}</p>
+                    <p className="flex-1 text-sm leading-6 text-slate-300">{nudge.message}</p>
                   </div>
                 </SpotlightCard>
               </AnimatedContent>

@@ -14,26 +14,11 @@ import { GradientText } from '../components/ui/GradientText';
 import { useForecast } from '../hooks/useForecast';
 import { useGridData } from '../hooks/useGridData';
 import { getMoerColor, getStatusColor, getStatusLabel } from '../constants';
-
-function formatHour(hour) {
-  if (hour === 0) return '12 am';
-  if (hour < 12) return `${hour} am`;
-  if (hour === 12) return '12 pm';
-  return `${hour - 12} pm`;
-}
+import { getBestWindowMeta } from '../utils/forecast';
+import { formatWindowFromPointRange } from '../utils/time';
 
 function getBestWindowLabel(forecast) {
-  if (!forecast?.length) return 'Unavailable';
-
-  let bestPoint = forecast[0];
-  for (const point of forecast.slice(0, 24)) {
-    if ((point.moer || 0) < (bestPoint.moer || 0)) {
-      bestPoint = point;
-    }
-  }
-
-  const startHour = new Date(bestPoint.time).getHours();
-  return `${formatHour(startHour)} to ${formatHour((startHour + 2) % 24)}`;
+  return formatWindowFromPointRange(getBestWindowMeta(forecast).points);
 }
 
 function ConditionRow({ label, value, valueClassName = '', valueStyle }) {

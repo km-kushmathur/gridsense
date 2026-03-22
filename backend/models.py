@@ -55,6 +55,9 @@ class NudgeItem(BaseModel):
     appliance: str
     emoji: str
     best_time: str
+    best_window_start: str
+    best_window_end: str
+    best_window_label: str
     co2_saved_grams: float
     message: str
 

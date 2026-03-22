@@ -4,6 +4,8 @@ import {
   MODERATE_EMISSIONS_SCORE_THRESHOLD,
   getCleanPowerScore,
 } from '../constants';
+import { getBestWindowMeta } from '../utils/forecast';
+import { formatWindowFromPointRange } from '../utils/time';
 import { DetailDisclosure } from './ui/DetailDisclosure';
 
 function SourceLink({ href, children }) {
@@ -20,17 +22,7 @@ function SourceLink({ href, children }) {
 }
 
 function formatWindow(forecast) {
-  if (!forecast?.length) return 'Unavailable';
-
-  let bestPoint = forecast[0];
-  for (const point of forecast.slice(0, 24)) {
-    if ((point.moer || 0) < (bestPoint.moer || 0)) {
-      bestPoint = point;
-    }
-  }
-
-  const bestDate = new Date(bestPoint.time);
-  return bestDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return formatWindowFromPointRange(getBestWindowMeta(forecast).points);
 }
 
 function TabButton({ active, onClick, children }) {
@@ -193,7 +185,7 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
                 <span className="font-semibold text-white">Heat-wave flag:</span> the interface marks elevated heat-wave pressure when any forecast hourly temperature in the next 24 hours exceeds 35°C.
               </p>
               <p>
-                <span className="font-semibold text-white">Best shift window:</span> the forecast layer searches for the minimum two-hour mean MOER window. The current best window begins around {bestWindow}.
+                <span className="font-semibold text-white">Best shift window:</span> the forecast layer searches for the minimum two-hour mean MOER window. The current best window is {bestWindow}.
               </p>
               <p>
                 <span className="font-semibold text-white">Grid stress:</span> this is a local heuristic derived from forecast demand and carbon conditions. It is not SCADA load, reserve margin, or a reliability declaration from a system operator.

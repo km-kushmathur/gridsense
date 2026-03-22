@@ -14,7 +14,9 @@ def env_flag(name: str, default: bool = False) -> bool:
 
 def use_mock_data() -> bool:
     """Return whether local mock mode is enabled."""
-    return env_flag("USE_MOCK_DATA", default=False)
+    # Default to mock mode so a fresh local checkout matches the README and
+    # .env.example behavior until live credentials are explicitly configured.
+    return env_flag("USE_MOCK_DATA", default=True)
 
 
 def env_first(*names: str, default: str = "") -> str:

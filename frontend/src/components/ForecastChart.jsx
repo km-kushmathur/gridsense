@@ -1,21 +1,8 @@
 import { getCleanPowerScore, getMoerColor } from '../constants';
+import { getBestWindowMeta } from '../utils/forecast';
+import { formatHourFromValue, formatWindowFromPointRange } from '../utils/time';
 import { SkeletonCard } from './SkeletonCard';
 import { DetailDisclosure } from './ui/DetailDisclosure';
-
-function formatHourLabel(hour) {
-  if (hour === 0) return '12a';
-  if (hour < 12) return `${hour}a`;
-  if (hour === 12) return '12p';
-  return `${hour - 12}p`;
-}
-
-function formatWindowLabel(points) {
-  if (!points.length) return 'Unavailable';
-  const start = new Date(points[0].time);
-  const end = new Date(points[points.length - 1].time);
-  const endHour = (end.getHours() + 1) % 24;
-  return `${formatHourLabel(start.getHours())} - ${formatHourLabel(endHour)}`;
-}
 
 function getTooltipPositionClass(index, total) {
   if (index <= 1) return 'left-0 translate-x-0';
@@ -51,18 +38,7 @@ export function ForecastChart({ forecast, loading, statusColor = '#22C55E' }) {
   const maxMoer = Math.max(...hourly.map((point) => point.moer || 0), 1);
   const currentHour = new Date().getHours();
   const currentIndex = Math.max(0, hourly.findIndex((point) => new Date(point.time).getHours() === currentHour));
-
-  let bestPairStart = 0;
-  let lowestAverage = Number.POSITIVE_INFINITY;
-  for (let index = 0; index < hourly.length - 1; index += 1) {
-    const averageMoer = ((hourly[index].moer || 0) + (hourly[index + 1].moer || 0)) / 2;
-    if (averageMoer < lowestAverage) {
-      lowestAverage = averageMoer;
-      bestPairStart = index;
-    }
-  }
-
-  const bestWindow = hourly.slice(bestPairStart, bestPairStart + 2);
+  const { points: bestWindow, startIndex: bestPairStart } = getBestWindowMeta(hourly);
 
   return (
     <div className="card-glass p-6 sm:p-7">
@@ -80,7 +56,7 @@ export function ForecastChart({ forecast, loading, statusColor = '#22C55E' }) {
 
         <div className="flex flex-wrap gap-2">
           <span className="metric-chip" style={{ borderColor: `${statusColor}30`, color: statusColor }}>
-            Derived best 2-hour window: {formatWindowLabel(bestWindow)}
+            Derived best 2-hour window: {formatWindowFromPointRange(bestWindow)}
           </span>
           <span className="metric-chip">
             Lowest forecast MOER: {Math.round(bestWindow[0]?.moer || 0)} lbs/MWh
@@ -105,59 +81,66 @@ export function ForecastChart({ forecast, loading, statusColor = '#22C55E' }) {
         </div>
 
         <div className="overflow-x-auto overflow-y-visible pb-3">
-          <div className="relative flex h-64 min-w-[720px] items-end gap-2 px-1 pt-12">
-          {hourly.map((point, index) => {
-            const moer = point.moer || 0;
-            const hour = new Date(point.time).getHours();
-            const color = getMoerColor(moer);
-            const cleanRatio = 1 - moer / (maxMoer * 1.15);
-            const height = Math.max(24, cleanRatio * 190 + 26);
-            const isNow = index === currentIndex;
-            const isBestWindow = index === bestPairStart || index === bestPairStart + 1;
-            const cleanScore = Math.round(getCleanPowerScore(point));
+          <div className="min-w-[720px] px-1">
+            <div className="relative flex h-56 items-end gap-2 pt-12">
+              {hourly.map((point, index) => {
+                const moer = point.moer || 0;
+                const color = getMoerColor(moer);
+                const cleanRatio = 1 - moer / (maxMoer * 1.15);
+                const height = Math.max(24, cleanRatio * 190 + 26);
+                const isNow = index === currentIndex;
+                const isBestWindow = index === bestPairStart || index === bestPairStart + 1;
+                const cleanScore = Math.round(getCleanPowerScore(point));
 
-            return (
-              <div key={point.time || index} className="group relative flex min-w-[32px] flex-1 items-end justify-center">
-                {isBestWindow && (
-                  <div className="absolute inset-x-0 bottom-0 top-10 rounded-t-[18px] bg-grid-clean/10" />
-                )}
+                return (
+                  <div key={point.time || index} className="group relative flex min-w-[32px] flex-1 items-end justify-center">
+                    {isBestWindow && (
+                      <div className="absolute inset-x-0 bottom-0 top-10 rounded-t-[18px] bg-grid-clean/10" />
+                    )}
 
-                {isNow && (
-                  <div className="absolute -top-1 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white">Now</span>
-                    <span
-                      className="h-2.5 w-2.5 rounded-full bg-white"
-                      style={{ boxShadow: '0 0 14px rgba(255,255,255,0.65)', animation: 'pulse 2s infinite' }}
-                    />
+                    {isNow && (
+                      <div className="absolute -top-1 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white">Now</span>
+                        <span
+                          className="h-2.5 w-2.5 rounded-full bg-white"
+                          style={{ boxShadow: '0 0 14px rgba(255,255,255,0.65)', animation: 'pulse 2s infinite' }}
+                        />
+                      </div>
+                    )}
+
+                    <div className="relative flex h-full w-full items-end">
+                      <div
+                        className="w-full rounded-t-[16px] transition duration-200 group-hover:opacity-100"
+                        style={{
+                          height,
+                          background: `linear-gradient(180deg, ${color}, ${color}bb)`,
+                          boxShadow: isNow ? `0 0 28px ${color}40` : 'none',
+                          opacity: isNow ? 1 : 0.88,
+                        }}
+                      />
+
+                      <div className={`pointer-events-none absolute bottom-full z-10 mb-3 hidden w-40 rounded-2xl border border-white/10 bg-[#071018]/95 px-3 py-2 text-left shadow-2xl group-hover:block ${getTooltipPositionClass(index, hourly.length)}`}>
+                        <p className="text-xs font-semibold text-white">{formatHourFromValue(point.time)}</p>
+                        <p className="mt-1 text-[11px] text-slate-300">Observed or forecast MOER: {Math.round(moer)} lbs CO2/MWh</p>
+                        <p className="text-[11px] text-slate-400">
+                          Derived score: {cleanScore}/100
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                )}
+                );
+              })}
+            </div>
 
-                <div className="relative flex w-full flex-col items-center justify-end">
-                  <div
-                    className="w-full rounded-t-[16px] transition duration-200 group-hover:opacity-100"
-                    style={{
-                      height,
-                      background: `linear-gradient(180deg, ${color}, ${color}bb)`,
-                      boxShadow: isNow ? `0 0 28px ${color}40` : 'none',
-                      opacity: isNow ? 1 : 0.88,
-                    }}
-                  />
-
-                  <span className="mt-3 text-[11px] font-medium text-slate-500">
-                    {index % 3 === 0 ? formatHourLabel(hour) : ''}
+            <div className="mt-3 flex gap-2">
+              {hourly.map((point, index) => (
+                <div key={`${point.time || index}-label`} className="flex min-w-[32px] flex-1 justify-center">
+                  <span className="h-4 text-[11px] font-medium text-slate-500">
+                    {index % 3 === 0 ? formatHourFromValue(point.time, '') : ''}
                   </span>
-
-                  <div className={`pointer-events-none absolute bottom-full z-10 mb-3 hidden w-40 rounded-2xl border border-white/10 bg-[#071018]/95 px-3 py-2 text-left shadow-2xl group-hover:block ${getTooltipPositionClass(index, hourly.length)}`}>
-                    <p className="text-xs font-semibold text-white">{formatHourLabel(hour)}</p>
-                    <p className="mt-1 text-[11px] text-slate-300">Observed or forecast MOER: {Math.round(moer)} lbs CO2/MWh</p>
-                    <p className="text-[11px] text-slate-400">
-                      Derived score: {cleanScore}/100
-                    </p>
-                  </div>
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
           </div>
         </div>
       </div>
