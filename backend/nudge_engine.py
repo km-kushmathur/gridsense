@@ -180,7 +180,7 @@ class NudgeEngine:
         appliances = list(APPLIANCE_KWH.keys())
 
         for index, appliance in enumerate(appliances):
-            window = fallback_windows[index % len(fallback_windows)]
+            window = fallback_windows[0]
             best_window_start = str(window.get("best_window_start", ""))
             best_window_end = str(window.get("best_window_end", ""))
             best_window_label = str(window.get("best_window_label", "Later tonight"))
@@ -193,6 +193,7 @@ class NudgeEngine:
                 best_window_end=best_window_end,
                 best_window_label=best_window_label,
                 co2_saved_grams=self._calculate_co2_saved(appliance, current_moer, best_moer),
+                window_avg_moer=float(window.get("avg_moer", 0.0)),
                 message=self._build_fallback_message(appliance, window),
             ))
 
@@ -210,7 +211,7 @@ class NudgeEngine:
         cleanest = self._find_cleanest_windows(forecast, n=len(APPLIANCE_KWH))
         assignments = []
         for index, appliance in enumerate(APPLIANCE_KWH.keys()):
-            window = cleanest[index % len(cleanest)] if cleanest else {
+            window = cleanest[0] if cleanest else {
                 "best_window_start": "",
                 "best_window_end": "",
                 "best_window_label": "Cleaner window",
@@ -299,6 +300,7 @@ class NudgeEngine:
                         current_moer,
                         float(assignment.get("avg_moer", current_moer)),
                     ),
+                    window_avg_moer=float(assignment.get("avg_moer", 0.0)),
                     message=message,
                 ))
 

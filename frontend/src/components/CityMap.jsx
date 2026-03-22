@@ -66,40 +66,49 @@ export function CityMap({ data, cityName, loading }) {
           <div className="flex flex-wrap gap-2">
             <span className="taxonomy-chip taxonomy-chip-observed">Observed geography</span>
           </div>
-          <h3 className="mt-3 text-xl font-semibold text-white">Where the region-level carbon signal applies</h3>
-          <p className="mt-1 text-sm text-slate-400">{cityName} is geocoded into the {data.region_label || 'local balancing region'} that receives the current carbon signal.</p>
+          <h3 className="mt-3 font-display text-xl font-semibold text-gray-900">Grid balancing region for {cityName}</h3>
+          <p className="mt-1 text-sm text-slate-600">{cityName} is mapped to the {data.region_label || 'local balancing region'}. All carbon data on this dashboard reflects that region.</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-right">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Observed MOER now</p>
           <p className="mt-2 text-3xl font-semibold" style={{ color: moerColor }}>
             {Math.round(data.moer || 0)}
           </p>
-          <p className="text-xs text-slate-500">lbs CO2 per MWh</p>
+          <p className="text-xs text-slate-500">lbs CO&#x2082;/MWh</p>
         </div>
       </div>
 
-      <div className="relative mt-6 overflow-hidden rounded-[30px] border border-white/[0.08] bg-[#09111a]">
+      <div className="relative mt-6 overflow-hidden rounded-[30px] border border-slate-200 bg-slate-100">
         {!mapLoaded && !mapFailed && (
           <div className="absolute inset-0 z-10">
             <SkeletonCard className="h-[280px] w-full rounded-none" />
           </div>
         )}
 
-        {mapFailed && osmEmbedUrl ? (
-          <iframe
-            key={osmEmbedUrl}
-            title={`Fallback map of ${cityName}`}
-            src={osmEmbedUrl}
-            className="h-[280px] w-full border-0"
-            loading="lazy"
-            onLoad={() => setMapLoaded(true)}
-          />
+        {mapFailed ? (
+          osmEmbedUrl ? (
+            <iframe
+              key={osmEmbedUrl}
+              title={`Map of ${cityName}`}
+              src={osmEmbedUrl}
+              className="h-[280px] w-full border-0"
+              loading="lazy"
+              onLoad={() => setMapLoaded(true)}
+            />
+          ) : (
+            <div className="flex h-[280px] w-full items-center justify-center bg-slate-100">
+              <p className="text-sm text-slate-500">Map unavailable for this location</p>
+            </div>
+          )
         ) : (
           <img
             key={mapUrl}
             alt={`Static map of ${cityName}`}
             src={mapUrl}
+            loading="lazy"
+            width="800"
+            height="280"
             className="h-[280px] w-full object-cover"
             onLoad={() => setMapLoaded(true)}
             onError={() => {
@@ -112,23 +121,23 @@ export function CityMap({ data, cityName, loading }) {
         <div
           className="pointer-events-none absolute inset-0"
           style={{
-            background: `linear-gradient(180deg, rgba(6,12,20,0.08) 0%, rgba(6,12,20,0.02) 35%, rgba(6,12,20,0.35) 100%), radial-gradient(circle at 50% 52%, ${statusColor}38 0%, ${statusColor}14 24%, transparent 58%)`,
+            background: `linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 35%, rgba(255,255,255,0.35) 100%), radial-gradient(circle at 50% 52%, ${statusColor}38 0%, ${statusColor}14 24%, transparent 58%)`,
           }}
         />
 
         <div className="absolute left-5 top-5 flex flex-wrap gap-2">
-          <div className="rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs font-medium text-slate-100 backdrop-blur-md">
+          <div className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 backdrop-blur-md">
             Regional carbon-signal context
           </div>
           {mapFailed && osmEmbedUrl && (
-            <div className="rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs font-medium text-slate-100 backdrop-blur-md">
+            <div className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700 backdrop-blur-md">
               Fallback base map
             </div>
           )}
         </div>
 
         <div
-          className="absolute bottom-5 right-5 rounded-full border px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md"
+          className="absolute bottom-5 right-5 rounded-full border px-3 py-1.5 text-xs font-semibold text-gray-900 backdrop-blur-md"
           style={{
             borderColor: `${statusColor}55`,
             background: `${statusColor}22`,
@@ -137,29 +146,29 @@ export function CityMap({ data, cityName, loading }) {
           {statusLabel}
         </div>
 
-        <div className="absolute bottom-5 left-5 rounded-2xl border border-white/10 bg-black/45 px-3 py-2 backdrop-blur-md">
+        <div className="absolute bottom-5 left-5 rounded-2xl border border-slate-200 bg-white/80 px-3 py-2 backdrop-blur-md">
           <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Signal scope</p>
-          <p className="mt-1 text-[11px] text-slate-100">Balancing-region level</p>
+          <p className="mt-1 text-[11px] text-gray-900">Balancing-region level</p>
           <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Geocoded point</p>
-          <p className="mt-1 text-[11px] text-slate-100">{coordinateLabel}</p>
+          <p className="mt-1 text-[11px] text-gray-900">{coordinateLabel}</p>
         </div>
 
         <div
-          className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_20px_rgba(255,255,255,0.45)]"
+          className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_20px_rgba(0,0,0,0.25)]"
           style={{ background: statusColor }}
         />
 
         {mapFailed && !osmEmbedUrl && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#09111a]/88 px-6 text-center backdrop-blur-sm">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/88 px-6 text-center backdrop-blur-sm">
             <div>
-              <p className="text-base font-semibold text-white">The static map image did not load.</p>
+              <p className="text-base font-semibold text-gray-900">Unable to load the map — check your connection.</p>
               <a
                 href={mapLink}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08]"
+                className="mt-3 inline-flex min-h-[44px] items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
               >
-                Open map in Google Maps
+                Open in Google Maps
               </a>
             </div>
           </div>
@@ -176,20 +185,20 @@ export function CityMap({ data, cityName, loading }) {
       <div className="mt-4">
         <DetailDisclosure
           badge="Map method"
-          title="Why this map shows context rather than local telemetry"
-          summary="Open for the geocoding workflow, region-scope limitation, and the reason neighborhood carbon shading is intentionally absent."
+          title="What the map shows and what it doesn't"
+          summary="How the location is resolved, why the signal is regional rather than local, and what that means for interpreting the data."
         >
           <p>
-            <span className="font-semibold text-white">Observed inputs:</span> Google Geocoding converts the selected city into latitude and longitude, and WattTime identifies the balancing region serving that location.
+            <span className="font-semibold text-gray-900">Observed inputs:</span> Google Geocoding converts the selected city into latitude and longitude, and WattTime identifies the balancing region serving that location.
           </p>
           <p>
-            <span className="font-semibold text-white">What the map means:</span> it provides geographic context for the point served by the current balancing-region carbon signal. The signal is region-level, not block-level.
+            <span className="font-semibold text-gray-900">What the map means:</span> it provides geographic context for the point served by the current balancing-region carbon signal. The signal is region-level, not block-level.
           </p>
           <p>
-            <span className="font-semibold text-white">Why there is no neighborhood overlay:</span> the current API stack does not provide documented feeder-level or neighborhood-level carbon telemetry, so the interface avoids implying that resolution.
+            <span className="font-semibold text-gray-900">Why no block-level overlay:</span> WattTime data is measured at the balancing-region level. No public API currently provides verified feeder- or neighborhood-level carbon telemetry, so this dashboard does not imply finer resolution than the data supports.
           </p>
           <p>
-            <span className="font-semibold text-white">Coordinates shown:</span> {coordinateLabel}.
+            <span className="font-semibold text-gray-900">Coordinates shown:</span> {coordinateLabel}.
           </p>
         </DetailDisclosure>
       </div>

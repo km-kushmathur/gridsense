@@ -1,22 +1,32 @@
 import { useNavigate } from 'react-router-dom';
 import { ShinyText } from './ui/ShinyText';
 
-export function TopBar({ cityName }) {
+export function TopBar({ cityName, cacheAge = null }) {
   const navigate = useNavigate();
 
+  function formatCacheAge(ms) {
+    if (!ms || ms < 0) return null;
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes} min ago`;
+  }
+
+  const cacheLabel = formatCacheAge(cacheAge);
+
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#08111bcc] backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
       <div className="page-shell flex items-center justify-between py-4">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-left transition hover:border-white/20 hover:bg-white/[0.05]"
+          className="flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-left transition hover:border-slate-300 hover:bg-slate-100"
         >
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-grid-clean/15 text-grid-clean shadow-[0_0_24px_rgba(34,197,94,0.18)]">
             <span className="h-2.5 w-2.5 rounded-full bg-grid-clean" />
           </span>
           <span>
-            <span className="block font-display text-lg font-semibold text-white">GridSense</span>
-            <span className="block text-xs text-slate-400">Understand your grid in plain English</span>
+            <span className="block font-display text-lg font-semibold text-gray-900">GridSense</span>
+            <span className="block text-xs text-slate-500">Understand your grid in plain English</span>
           </span>
         </button>
 
@@ -24,14 +34,23 @@ export function TopBar({ cityName }) {
           {cityName && (
             <button
               onClick={() => navigate('/')}
-              className="metric-chip hover:border-white/20 hover:bg-white/[0.06]"
+              className="metric-chip hover:border-slate-300 hover:bg-slate-100"
             >
-              <span className="h-2 w-2 rounded-full bg-sky-300" />
+              <span className="h-2 w-2 rounded-full bg-sky-500" />
               <span>{cityName}</span>
             </button>
           )}
 
-          <div className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-slate-300">
+          {cacheLabel && (
+            <div
+              className="rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-700"
+              aria-live="polite"
+            >
+              Cached — data from {cacheLabel}
+            </div>
+          )}
+
+          <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-grid-clean shadow-[0_0_12px_rgba(34,197,94,0.55)]" style={{ animation: 'pulse 2s infinite' }} />
               <ShinyText className="text-sm font-medium">Live updates every 5 minutes</ShinyText>

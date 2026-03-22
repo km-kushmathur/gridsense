@@ -1,3 +1,3 @@
-export function SkeletonCard({ className = '' }) {
-  return <div className={`skeleton ${className}`} />;
+export function SkeletonCard({ className = '', style }) {
+  return <div className={`skeleton ${className}`} style={style} />;
 }

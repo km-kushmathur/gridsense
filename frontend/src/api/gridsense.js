@@ -1,4 +1,8 @@
+import * as gridCache from '../cache/gridCache';
+
 const API_BASE = '/api';
+const WEATHER_TTL = 300_000; // 5 minutes
+const NUDGES_TTL = 300_000;  // 5 minutes
 
 async function parseResponse(res, fallbackMessage) {
   if (res.ok) {
@@ -27,17 +31,29 @@ export async function fetchForecast(city) {
 }
 
 export async function fetchWeather(city) {
+  if (!gridCache.isStale(city, 'weather', WEATHER_TTL)) {
+    const cached = gridCache.getData(city, 'weather');
+    if (cached) return cached;
+  }
   const res = await fetch(`${API_BASE}/weather?city=${encodeURIComponent(city)}`);
-  return parseResponse(res, 'Failed to fetch weather');
+  const data = await parseResponse(res, 'Failed to fetch weather');
+  gridCache.set(city, 'weather', data);
+  return data;
 }
 
 export async function fetchNudges(city) {
+  if (!gridCache.isStale(city, 'nudges', NUDGES_TTL)) {
+    const cached = gridCache.getData(city, 'nudges');
+    if (cached) return cached;
+  }
   const res = await fetch(`${API_BASE}/nudges`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ city }),
   });
-  return parseResponse(res, 'Failed to fetch nudges');
+  const data = await parseResponse(res, 'Failed to fetch nudges');
+  gridCache.set(city, 'nudges', data);
+  return data;
 }
 
 export async function fetchSimulation(city, scenario) {

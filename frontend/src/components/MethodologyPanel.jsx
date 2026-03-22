@@ -14,7 +14,7 @@ function SourceLink({ href, children }) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="text-sm font-medium text-sky-300 transition hover:text-sky-200"
+      className="text-sm font-medium text-sky-600 transition hover:text-sky-700"
     >
       {children}
     </a>
@@ -40,8 +40,8 @@ function TabButton({ active, onClick, children }) {
 function PanelIntro({ title, summary }) {
   return (
     <div>
-      <h3 className="text-lg font-semibold text-white">{title}</h3>
-      <p className="mt-2 text-sm leading-7 text-slate-300">{summary}</p>
+      <h3 className="font-display text-lg font-semibold text-gray-900">{title}</h3>
+      <p className="mt-2 text-base leading-7 text-slate-600">{summary}</p>
     </div>
   );
 }
@@ -75,20 +75,20 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <div className="mini-stat-card">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Observed now</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{currentMoer} lbs CO2/MWh</p>
-          <p className="mt-2 text-sm text-slate-400">Marginal Operating Emissions Rate from the serving balancing region.</p>
+          <p className="mt-2 font-display text-2xl font-semibold text-gray-900">{currentMoer} lbs CO&#x2082;/MWh</p>
+          <p className="mt-2 text-sm text-slate-500">Marginal Operating Emissions Rate from the serving balancing region.</p>
         </div>
 
         <div className="mini-stat-card">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Derived now</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{currentScore}/100</p>
-          <p className="mt-2 text-sm text-slate-400">Normalized MOER score used only as a readability index.</p>
+          <p className="mt-2 font-display text-2xl font-semibold text-gray-900">{currentScore}/100</p>
+          <p className="mt-2 text-sm text-slate-500">Clean Power Score — a local index, not a direct WattTime field. See Derived metrics for the formula.</p>
         </div>
 
         <div className="mini-stat-card">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Decision support</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{bestWindow}</p>
-          <p className="mt-2 text-sm text-slate-400">Current best forecast shift window used to support timing nudges.</p>
+          <p className="mt-2 font-display text-2xl font-semibold text-gray-900">{bestWindow}</p>
+          <p className="mt-2 text-sm text-slate-500">Current best forecast shift window used to support timing nudges.</p>
         </div>
       </div>
 
@@ -118,16 +118,16 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
               summary="Definition, units, interpretation, and why this is the decision signal for load shifting."
             >
               <p>
-                <span className="font-semibold text-white">Definition:</span> WattTime defines Marginal Operating Emissions Rate as the emissions rate of the generator responding to an incremental change in load on the serving grid.
+                <span className="font-semibold text-gray-900">Definition:</span> WattTime defines MOER as the emissions intensity of the marginal generator — the unit of generation that would respond to an incremental increase in load on the serving balancing region. It reflects the carbon cost of the next kilowatt-hour consumed, not the average carbon intensity of all generators currently running.
               </p>
               <p>
-                <span className="font-semibold text-white">Units:</span> pounds of carbon dioxide per megawatt-hour, written as lbs CO2/MWh.
+                <span className="font-semibold text-gray-900">Units:</span> pounds of CO&#x2082; per megawatt-hour, written as lbs CO&#x2082;/MWh.
               </p>
               <p>
-                <span className="font-semibold text-white">Interpretation:</span> lower MOER means the next unit of flexible demand is likely to be served by a cleaner marginal generator, making it the correct operational signal for load shifting.
+                <span className="font-semibold text-gray-900">Interpretation:</span> lower MOER means the marginal generator is cleaner at that moment — making it the right signal for timing flexible demand. Using average emissions intensity instead would misattribute the actual carbon impact of incremental consumption.
               </p>
               <p>
-                <span className="font-semibold text-white">Current observed value:</span> {currentMoer} lbs CO2/MWh.
+                <span className="font-semibold text-gray-900">Current observed value:</span> {currentMoer} lbs CO&#x2082;/MWh.
               </p>
             </DetailDisclosure>
 
@@ -137,13 +137,13 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
               summary="What the location and weather APIs contribute, and what they do not provide."
             >
               <p>
-                <span className="font-semibold text-white">Google Geocoding:</span> converts the selected city into latitude and longitude so the dashboard can place the city geographically and map it to a balancing region.
+                <span className="font-semibold text-gray-900">Google Geocoding:</span> converts the selected city into latitude and longitude so the dashboard can place the city geographically and map it to a balancing region.
               </p>
               <p>
-                <span className="font-semibold text-white">Open-Meteo:</span> supplies direct weather variables such as current air temperature and the hourly temperature forecast. The current observed air temperature is {currentTemp}°C.
+                <span className="font-semibold text-gray-900">Open-Meteo:</span> supplies direct weather variables such as current air temperature and the hourly temperature forecast. The current observed air temperature is {currentTemp}°C.
               </p>
               <p>
-                <span className="font-semibold text-white">Limitation:</span> neither API provides neighborhood-level carbon telemetry or utility control-room stress measurements.
+                <span className="font-semibold text-gray-900">Limitation:</span> neither API provides neighborhood-level carbon telemetry or utility control-room stress measurements.
               </p>
             </DetailDisclosure>
           </>
@@ -162,17 +162,20 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
               summary="The exact formula, thresholds, and the reason this should not be interpreted as renewable-share percentage."
             >
               <p>
-                <span className="font-semibold text-white">Formula:</span>{' '}
-                <code className="rounded bg-black/30 px-2 py-1 text-sky-200">score = max(0, min(100, 100 * (1 - MOER / 1000)))</code>
+                <span className="font-semibold text-gray-900">Formula:</span>{' '}
+                <code className="rounded bg-slate-100 px-2 py-1 text-sky-700">score = max(0, min(100, 100 * (1 - MOER / 1000)))</code>
               </p>
               <p>
-                <span className="font-semibold text-white">Current example:</span> with MOER = {currentMoer} lbs CO2/MWh, the derived score is {currentScore}/100.
+                <span className="font-semibold text-gray-900">Current example:</span> with MOER = {currentMoer} lbs CO&#x2082;/MWh, the derived score is {currentScore}/100.
               </p>
               <p>
-                <span className="font-semibold text-white">Classification:</span> lower emissions at scores greater than or equal to {LOW_EMISSIONS_SCORE_THRESHOLD}; moderate emissions for scores from {MODERATE_EMISSIONS_SCORE_THRESHOLD} to {LOW_EMISSIONS_SCORE_THRESHOLD - 1}; high carbon below {MODERATE_EMISSIONS_SCORE_THRESHOLD}.
+                <span className="font-semibold text-gray-900">Classification:</span> lower emissions at scores greater than or equal to {LOW_EMISSIONS_SCORE_THRESHOLD}; moderate emissions for scores from {MODERATE_EMISSIONS_SCORE_THRESHOLD} to {LOW_EMISSIONS_SCORE_THRESHOLD - 1}; high carbon below {MODERATE_EMISSIONS_SCORE_THRESHOLD}.
               </p>
               <p>
-                <span className="font-semibold text-white">Limitation:</span> this is a local normalization layer. WattTime does not provide it directly.
+                <span className="font-semibold text-gray-900">Limitation:</span> this is a local normalization layer. WattTime does not provide it directly.
+              </p>
+              <p>
+                <span className="font-semibold text-gray-900">Ceiling justification:</span> the formula uses 1,000 lbs CO&#x2082;/MWh as the normalization ceiling. This value exceeds the marginal emissions rate of the dirtiest U.S. coal plants (typically 900–1,000 lbs CO&#x2082;/MWh), ensuring the score stays above zero under real-world conditions while keeping the scale intuitive.
               </p>
             </DetailDisclosure>
 
@@ -182,13 +185,13 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
               summary="How the dashboard derives operational cues from observed carbon and weather variables."
             >
               <p>
-                <span className="font-semibold text-white">Heat-wave flag:</span> the interface marks elevated heat-wave pressure when any forecast hourly temperature in the next 24 hours exceeds 35°C.
+                <span className="font-semibold text-gray-900">Heat-wave flag:</span> the interface marks elevated heat-wave pressure when any forecast hourly temperature in the next 24 hours exceeds 35°C.
               </p>
               <p>
-                <span className="font-semibold text-white">Best shift window:</span> the forecast layer searches for the minimum two-hour mean MOER window. The current best window is {bestWindow}.
+                <span className="font-semibold text-gray-900">Best shift window:</span> the forecast layer searches for the minimum two-hour mean MOER window. The current best window is {bestWindow}.
               </p>
               <p>
-                <span className="font-semibold text-white">Grid stress:</span> this is a local heuristic derived from forecast demand and carbon conditions. It is not SCADA load, reserve margin, or a reliability declaration from a system operator.
+                <span className="font-semibold text-gray-900">Grid stress:</span> this is a local heuristic derived from forecast demand and carbon conditions. It is not SCADA load, reserve margin, or a reliability declaration from a system operator.
               </p>
             </DetailDisclosure>
           </>
@@ -207,13 +210,13 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
               summary="The distinction between measured carbon data, locally computed savings, and generated explanatory text."
             >
               <p>
-                <span className="font-semibold text-white">Physical inputs:</span> forecast MOER, current conditions, and the lowest-emission windows already identified by the dashboard.
+                <span className="font-semibold text-gray-900">Physical inputs:</span> forecast MOER, current conditions, and the lowest-emission windows already identified by the dashboard.
               </p>
               <p>
-                <span className="font-semibold text-white">Derived savings:</span> estimated carbon benefit is computed from appliance load assumptions and the difference between current MOER and the suggested window.
+                <span className="font-semibold text-gray-900">Derived savings:</span> estimated carbon benefit is computed from appliance load assumptions and the difference between current MOER and the suggested window.
               </p>
               <p>
-                <span className="font-semibold text-white">Generated output:</span> Azure OpenAI converts those values into structured timing recommendations. The model does not generate MOER, coordinates, weather, or grid-stress measurements.
+                <span className="font-semibold text-gray-900">Generated output:</span> Azure OpenAI converts those values into structured timing recommendations. The model does not generate MOER, coordinates, weather, or grid-stress measurements.
               </p>
             </DetailDisclosure>
 

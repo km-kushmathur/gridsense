@@ -8,22 +8,22 @@ export default {
     extend: {
       colors: {
         grid: {
-          bg: '#0F1117',
-          surface: '#13151F',
-          card: '#1A1D27',
-          border: '#2A2A28',
-          divider: '#1E1E1C',
+          bg: '#F8FAFC',
+          surface: '#F1F5F9',
+          card: '#FFFFFF',
+          border: '#E2E8F0',
+          divider: '#F1F5F9',
           clean: '#22C55E',
           moderate: '#EAB308',
           dirty: '#EF4444',
           info: '#3B8BD4',
         },
         text: {
-          primary: '#D0D0CE',
-          muted: '#888780',
-          hint: '#444441',
-          label: '#555553',
-          body: '#666663',
+          primary: '#1E293B',
+          muted: '#475569',
+          hint: '#94A3B8',
+          label: '#64748B',
+          body: '#334155',
         },
       },
       fontFamily: {

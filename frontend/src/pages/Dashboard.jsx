@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchAlertCount, fetchWeather } from '../api/gridsense';
+import { fetchAlertCount } from '../api/gridsense';
 import { AlertSubscribe } from '../components/AlertSubscribe';
 import { CityMap } from '../components/CityMap';
 import { ForecastChart } from '../components/ForecastChart';
@@ -14,7 +14,10 @@ import { DetailDisclosure } from '../components/ui/DetailDisclosure';
 import { GradientText } from '../components/ui/GradientText';
 import { useForecast } from '../hooks/useForecast';
 import { useGridData } from '../hooks/useGridData';
+import { useWeather } from '../hooks/useWeather';
+import * as gridCache from '../cache/gridCache';
 import { getMoerColor, getStatusColor, getStatusLabel } from '../constants';
+import { StatusChip } from '../components/ui/StatusChip';
 import { getBestWindowMeta } from '../utils/forecast';
 import { formatWindowFromPointRange } from '../utils/time';
 
@@ -24,9 +27,9 @@ function getBestWindowLabel(forecast) {
 
 function ConditionRow({ label, value, valueClassName = '', valueStyle }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-white/6 py-3 last:border-b-0">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className={`text-sm font-semibold text-white ${valueClassName}`} style={valueStyle}>
+    <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-3 last:border-b-0">
+      <span className="text-sm text-slate-500">{label}</span>
+      <span className={`text-sm font-semibold text-gray-900 ${valueClassName}`} style={valueStyle}>
         {value}
       </span>
     </div>
@@ -38,37 +41,17 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const city = decodeURIComponent(cityName);
 
-  const { data: gridData, loading: gridLoading, error: gridError } = useGridData(city);
-  const { forecast, loading: forecastLoading, error: forecastError } = useForecast(city);
+  const { data: gridData, loading: gridLoading, error: gridError, fromCache: gridFromCache } = useGridData(city);
+  const { forecast, loading: forecastLoading, error: forecastError, fromCache: forecastFromCache } = useForecast(city);
 
-  const [weather, setWeather] = useState(null);
+  const isCached = gridFromCache || forecastFromCache;
+  const cacheAge = isCached ? gridCache.getAge(city, 'intensity') || gridCache.getAge(city, 'forecast') : null;
+
+  const weather = useWeather(city);
   const [showWelcome, setShowWelcome] = useState(false);
   const [alertCount, setAlertCount] = useState(0);
   const [showStressBanner, setShowStressBanner] = useState(false);
   const previousStressRef = useRef(null);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadWeather() {
-      try {
-        const result = await fetchWeather(city);
-        if (active) {
-          setWeather(result);
-        }
-      } catch {
-        if (active) {
-          setWeather(null);
-        }
-      }
-    }
-
-    loadWeather();
-
-    return () => {
-      active = false;
-    };
-  }, [city]);
 
   useEffect(() => {
     try {
@@ -103,7 +86,7 @@ export default function Dashboard() {
   const dashboardError = gridError || forecastError;
   const statusColor = getStatusColor(gridData);
   const statusLabel = getStatusLabel(gridData);
-  const bestWindow = getBestWindowLabel(forecast);
+  const bestWindow = useMemo(() => getBestWindowLabel(forecast), [forecast]);
   const currentTemperature = weather?.temp_c ?? gridData?.temp_c;
   const currentCondition = weather?.condition || 'Conditions loading';
   const heatWave = weather?.heat_wave ?? gridData?.heat_wave;
@@ -124,7 +107,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <TopBar cityName={city} />
+      <TopBar cityName={city} cacheAge={isCached ? cacheAge : null} />
 
       <main className="page-shell pb-16">
         {showWelcome && (
@@ -132,14 +115,14 @@ export default function Dashboard() {
             <div className="card-glass flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-grid-clean">Welcome to GridSense</p>
-                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">
+                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
                   Start with the live carbon signal, then use the forecast and recommendations to decide when flexible demand should move. Formulas, source details, and limitations stay available through the reference layer below.
                 </p>
               </div>
 
               <button
                 onClick={dismissWelcome}
-                className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/[0.07]"
+                className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
               >
                 Dismiss
               </button>
@@ -154,7 +137,7 @@ export default function Dashboard() {
               A layered operating view of <GradientText>{city}</GradientText>, built around the live carbon signal first.
             </h1>
             <p className="section-subtitle max-w-3xl">
-              The main dashboard prioritizes the current signal, the next 24-hour forecast, map context, and appliance timing recommendations. Scientific definitions and derivations remain available without crowding the primary reading path.
+              See how clean or dirty your electricity is right now, what the next 24 hours look like, and the single best time to run your heaviest appliances.
             </p>
           </section>
         </AnimatedContent>
@@ -163,9 +146,9 @@ export default function Dashboard() {
           <AnimatedContent delay={140}>
             <section>
               <span className="section-kicker">Current signal</span>
-              <h2 className="section-title">Live carbon signal and normalized operating score</h2>
+              <h2 className="section-title">Live Carbon Rate and Clean Power Score</h2>
               <p className="section-subtitle">
-                Read the observed Marginal Operating Emissions Rate first. The normalized score sits beside it as a compact ranking layer for timing decisions.
+                The Carbon Rate measures how much CO&#x2082; the grid emits per unit of electricity right now. The Clean Power Score translates that number into a 0–100 scale so you can quickly decide whether this is a good time to run heavy appliances.
               </p>
 
               <div className="mt-6">
@@ -184,19 +167,19 @@ export default function Dashboard() {
           <AnimatedContent delay={180}>
             <section>
               <span className="section-kicker">Current conditions</span>
-              <h2 className="section-title">Weather and operating pressure</h2>
+              <h2 className="section-title">Weather and Grid Load Pressure</h2>
               <p className="section-subtitle">
-                Weather is directly observed. Heat-wave pressure and grid stress are local interpretation layers that help prioritize load shifting.
+                Live air temperature and conditions from Open-Meteo. Grid Load Pressure and heat-wave risk are derived from the forecast — use them alongside the carbon signal to judge urgency.
               </p>
 
               {showStressBanner ? (
                 <div
-                  className="mt-6 rounded-lg border border-[#EAB30840] bg-[#1A0A00] px-4 py-3 text-[12px] text-[#EAB308]"
+                  className="mt-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-[12px] text-yellow-800"
                   style={{ borderLeft: '2px solid #EAB308' }}
                 >
-                  <p className="font-semibold">Grid stress rising — {Math.round(currentStress)}%</p>
+                  <p className="font-semibold">Grid Load Pressure rising — {Math.round(currentStress)}%</p>
                   {alertCount > 0 ? (
-                    <p className="mt-1 text-[11px] text-[#f6d76d]">Subscribed users have been notified.</p>
+                    <p className="mt-1 text-[11px] text-yellow-700">Subscribed users have been notified.</p>
                   ) : null}
                 </div>
               ) : null}
@@ -209,27 +192,18 @@ export default function Dashboard() {
                         <span className="taxonomy-chip taxonomy-chip-observed">Observed weather</span>
                         <span className="taxonomy-chip taxonomy-chip-derived">Derived pressure</span>
                       </div>
-                      <p className="mt-3 text-2xl font-semibold text-white">{statusLabel}</p>
+                      <p className="mt-3 text-2xl font-semibold text-gray-900">{statusLabel}</p>
                     </div>
-                    <span
-                      className="rounded-full border px-3 py-1 text-sm font-semibold"
-                      style={{
-                        color: statusColor,
-                        borderColor: `${statusColor}40`,
-                        background: `${statusColor}12`,
-                      }}
-                    >
-                      Live signal
-                    </span>
+                    <StatusChip status={gridData?.status} color={statusColor} label="Live signal" />
                   </div>
 
-                  <div className="rounded-[26px] border border-white/8 bg-black/20 p-4">
+                  <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-4">
                     <GridStressGauge value={currentStress} />
                   </div>
 
-                  <div className="rounded-[24px] border border-white/8 bg-black/15 px-4">
+                  <div className="rounded-[24px] border border-slate-200 bg-white px-4">
                     <ConditionRow
-                      label="Carbon intensity"
+                      label="Carbon Rate (lbs CO₂/MWh)"
                       value={`${Math.round(gridData?.moer || 0)} lbs/MWh`}
                       valueStyle={{ color: getMoerColor(gridData?.moer || 0) }}
                     />
@@ -252,13 +226,13 @@ export default function Dashboard() {
                     summary="Open for the heat-wave rule, the meaning of grid stress, and what this panel should be used for."
                   >
                     <p>
-                      <span className="font-semibold text-white">Observed values:</span> air temperature and weather summary come from Open-Meteo.
+                      <span className="font-semibold text-gray-900">Observed values:</span> air temperature and weather summary come from Open-Meteo.
                     </p>
                     <p>
-                      <span className="font-semibold text-white">Derived values:</span> heat-wave pressure is triggered when any next-24-hour forecast temperature exceeds 35°C. Grid stress is a local heuristic for operational pressure, not a utility control-room measurement.
+                      <span className="font-semibold text-gray-900">Derived values:</span> heat-wave pressure is triggered when any next-24-hour forecast temperature exceeds 35°C. Grid Load Pressure is a local heuristic for operational pressure, not a utility control-room measurement.
                     </p>
                     <p>
-                      <span className="font-semibold text-white">Use:</span> combine this panel with the MOER forecast to decide how urgent it is to move flexible load away from hotter, higher-pressure hours.
+                      <span className="font-semibold text-gray-900">Use:</span> combine this panel with the MOER forecast to decide how urgent it is to move flexible load away from hotter, higher-pressure hours.
                     </p>
                   </DetailDisclosure>
                 </div>
@@ -269,10 +243,10 @@ export default function Dashboard() {
 
         <AnimatedContent delay={300} className="mt-10">
           <section>
-            <span className="section-kicker">24-hour forecast</span>
-            <h2 className="section-title">Next 24 hours of carbon timing</h2>
+            <span className="section-kicker">Next 24 hours</span>
+            <h2 className="section-title">Next 24 Hours — Best times to run high-energy appliances</h2>
             <p className="section-subtitle">
-              Use the forecast to identify the lowest-emission window before shifting EV charging, laundry, or other flexible demand.
+              Find the cleanest hours ahead to schedule EV charging, laundry, or other heavy loads for the lowest carbon impact.
             </p>
 
             <div className="mt-6">
@@ -287,7 +261,7 @@ export default function Dashboard() {
               <span className="section-kicker">Map context</span>
               <h2 className="section-title">Geographic context for the serving balancing region</h2>
               <p className="section-subtitle">
-                The map anchors the city geographically and shows where the region-level carbon signal applies. It is contextual, not neighborhood telemetry.
+                This map shows where {city} sits within its grid balancing region. The carbon signal applies at the regional level — not block by block.
               </p>
 
               <div className="mt-6">
@@ -298,10 +272,10 @@ export default function Dashboard() {
 
           <AnimatedContent delay={400}>
             <section>
-              <span className="section-kicker">Recommendations</span>
-              <h2 className="section-title">Actionable timing guidance</h2>
+              <span className="section-kicker">What to do now</span>
+              <h2 className="section-title">What to Do Now</h2>
               <p className="section-subtitle">
-                Recommendations are generated only after the physical and derived layers are computed, so the action stays tied to documented signals.
+                The single best window to run all your high-draw appliances, based on the forecast. Estimated carbon savings are shown for each one.
               </p>
 
               <div className="mt-6">
@@ -317,8 +291,8 @@ export default function Dashboard() {
       </main>
 
       {dashboardError && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-amber-400/20 bg-[#23180d]/95 px-4 py-2 text-sm text-amber-100 shadow-xl">
-          Some live calls failed. The dashboard may be showing cached or fallback data.
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 shadow-xl">
+          Unable to load some grid data — check your connection and try refreshing. The dashboard may be showing cached data.
         </div>
       )}
     </div>

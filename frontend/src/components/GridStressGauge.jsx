@@ -1,40 +1,58 @@
 import { getStressColor } from '../constants';
 
+export function GridStressGaugeSkeleton() {
+  return (
+    <div className="flex flex-col items-center" aria-label="Loading grid load pressure">
+      <svg viewBox="0 0 140 92" className="h-[92px] w-[150px]">
+        <path
+          d="M 15 75 A 55 55 0 0 1 125 75"
+          fill="none"
+          stroke="#CBD5E1"
+          strokeWidth="10"
+          strokeLinecap="round"
+          style={{ opacity: 0.5 }}
+        />
+        <circle cx="70" cy="75" r="4" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.5" />
+      </svg>
+      <div className="mt-1 flex w-full max-w-[150px] items-center justify-between text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        <span>Safe</span>
+        <span>Critical</span>
+      </div>
+      <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-400">Grid Load Pressure</p>
+    </div>
+  );
+}
+
 export function GridStressGauge({ value = 0 }) {
   const clamped = Math.max(0, Math.min(100, value));
   const color = getStressColor(clamped);
   const critical = clamped > 85;
 
-  // Arc math: semicircle from left to right
-  // Path: M 15 75 A 55 55 0 0 1 125 75
-  // Center: (70, 75), radius: 55
-  // Angle range: 180 degrees (pi), from left (180°) to right (0°)
   const radius = 55;
   const cx = 70;
   const cy = 75;
 
-  // Active arc: sweep proportional to clamped value
   const sweepAngle = (clamped / 100) * Math.PI;
-  const endX = cx - radius * Math.cos(sweepAngle);
-  const endY = cy - radius * Math.sin(sweepAngle);
-
-  // Full arc length for stroke-dasharray
   const fullArcLength = Math.PI * radius;
   const activeLength = (clamped / 100) * fullArcLength;
 
-  // Needle endpoint
   const needleAngle = Math.PI - sweepAngle;
   const needleX = cx + radius * Math.cos(needleAngle);
   const needleY = cy - radius * Math.sin(needleAngle);
 
+  const stressLabel = clamped <= 60 ? 'low' : clamped <= 85 ? 'moderate' : 'critical';
+
   return (
     <div className="flex flex-col items-center">
-      <svg viewBox="0 0 140 92" className="h-[92px] w-[150px]">
+      <div aria-live="polite" className="sr-only">
+        Grid Load Pressure: {Math.round(clamped)}%, {stressLabel}
+      </div>
+      <svg viewBox="0 0 140 92" className="h-[92px] w-[150px]" role="img" aria-label={`Grid Load Pressure gauge showing ${Math.round(clamped)}% — ${stressLabel}`}>
         {/* Background arc */}
         <path
           d="M 15 75 A 55 55 0 0 1 125 75"
           fill="none"
-          stroke="#1E1E1C"
+          stroke="#CBD5E1"
           strokeWidth="10"
           strokeLinecap="round"
         />
@@ -43,7 +61,7 @@ export function GridStressGauge({ value = 0 }) {
         <path
           d="M 15 75 A 55 55 0 0 1 125 75"
           fill="none"
-          stroke="rgba(34,197,94,0.3)"
+          stroke="rgba(34,197,94,0.25)"
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={`${fullArcLength * 0.5} ${fullArcLength * 0.5}`}
@@ -53,7 +71,7 @@ export function GridStressGauge({ value = 0 }) {
         <path
           d="M 15 75 A 55 55 0 0 1 125 75"
           fill="none"
-          stroke="rgba(239,68,68,0.3)"
+          stroke="rgba(239,68,68,0.25)"
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={`${fullArcLength * 0.5} ${fullArcLength * 0.5}`}
@@ -77,14 +95,14 @@ export function GridStressGauge({ value = 0 }) {
           y1={cy}
           x2={needleX}
           y2={needleY}
-          stroke="#D0D0CE"
+          stroke="#475569"
           strokeWidth="2"
           strokeLinecap="round"
           style={{ transition: 'all 0.4s ease-out' }}
         />
 
         {/* Center pivot */}
-        <circle cx={cx} cy={cy} r="4" fill="#1A1D27" stroke="#D0D0CE" strokeWidth="1.5" />
+        <circle cx={cx} cy={cy} r="4" fill="#F8FAFC" stroke="#64748B" strokeWidth="1.5" />
 
         <text x="70" y="60" textAnchor="middle" style={{ fontSize: 18, fontWeight: 700, fill: color }}>
           {Math.round(clamped)}%
@@ -100,11 +118,11 @@ export function GridStressGauge({ value = 0 }) {
         <span className="rounded-full border border-grid-clean/25 bg-grid-clean/10 px-2 py-1 text-grid-clean">
           Safe
         </span>
-        <span className="rounded-full border border-red-500/25 bg-red-500/10 px-2 py-1 text-red-300">
+        <span className="rounded-full border border-red-500/25 bg-red-500/10 px-2 py-1 text-red-500">
           Critical
         </span>
       </div>
-      <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">Grid stress</p>
+      <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-400">Grid Load Pressure</p>
     </div>
   );
 }

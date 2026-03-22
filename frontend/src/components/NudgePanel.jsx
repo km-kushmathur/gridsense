@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchNudges } from '../api/gridsense';
 import { SkeletonCard } from './SkeletonCard';
-import { AnimatedContent } from './ui/AnimatedContent';
 import { DetailDisclosure } from './ui/DetailDisclosure';
-import { SpotlightCard } from './ui/SpotlightCard';
 import { StarBorder } from './ui/StarBorder';
 import { formatHourFromValue, formatWindowRange } from '../utils/time';
 
-const APPLIANCE_ORDER = ['ev_charger', 'dishwasher', 'dryer', 'washer'];
+const APPLIANCE_ORDER = ['ev_charger', 'dryer', 'dishwasher', 'washer'];
 
 const APPLIANCE_META = {
   dishwasher: {
@@ -22,7 +20,7 @@ const APPLIANCE_META = {
   },
   ev_charger: {
     color: '#7dd3fc',
-    label: 'EV charger',
+    label: 'EV Charger',
     icon: '⚡',
   },
   dryer: {
@@ -31,6 +29,15 @@ const APPLIANCE_META = {
     icon: '🌀',
   },
 };
+
+const APPLIANCE_KWH = {
+  dishwasher: 1.2,
+  washer: 0.5,
+  ev_charger: 7.2,
+  dryer: 3.5,
+};
+
+const AVG_ELECTRICITY_COST_PER_KWH = 0.16; // US national average $/kWh (EIA 2024)
 
 function sortNudges(nudges) {
   return [...nudges].sort((left, right) => {
@@ -78,6 +85,12 @@ export function NudgePanel({ city }) {
     loadNudges();
   }, [loadNudges]);
 
+  const bestNudge = nudges[0];
+  const windowTime = bestNudge ? formatBestWindow(bestNudge) : null;
+  const windowMoer = bestNudge?.window_avg_moer || 0;
+  const totalCo2Saved = nudges.reduce((sum, n) => sum + (n.co2_saved_grams || 0), 0);
+  const totalKwh = nudges.reduce((sum, n) => sum + (APPLIANCE_KWH[n.appliance] || 1.0), 0);
+
   return (
     <div className="card-glass p-6 sm:p-7">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -85,9 +98,9 @@ export function NudgePanel({ city }) {
           <div className="flex flex-wrap gap-2">
             <span className="taxonomy-chip taxonomy-chip-generated">Generated recommendation</span>
           </div>
-          <p className="panel-title">Smart appliance nudges</p>
+          <p className="panel-title">What to Do Now</p>
           <p className="panel-subtitle">
-            Forecasted low-MOER windows are converted into appliance timing recommendations so the operational action is immediately clear.
+            The cleanest upcoming window for EV charging, laundry, and other high-draw appliances. Savings estimates assume you'd otherwise run them right now.
           </p>
         </div>
 
@@ -95,103 +108,141 @@ export function NudgePanel({ city }) {
           <button
             onClick={loadNudges}
             disabled={loading}
-            className="rounded-full bg-[#0d2015] px-4 py-2.5 text-sm font-semibold text-grid-clean transition hover:bg-[#14301e] disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full bg-green-50 px-4 py-2.5 text-sm font-semibold text-grid-clean transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? 'Refreshing...' : 'Refresh nudges'}
+            {loading ? 'Refreshing...' : 'Refresh Data'}
           </button>
         </StarBorder>
       </div>
 
       {error && (
-        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          Some live nudge data failed to load. If cached or fallback nudges are available, they are shown below.
+        <div className="mt-4 rounded-2xl border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
+          Unable to load recommendations — check your connection and try refreshing. If cached data is available, it is shown below.
         </div>
       )}
 
       {loading && nudges.length === 0 ? (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {Array.from({ length: 4 }, (_, index) => (
-            <SkeletonCard key={index} className="h-[180px] rounded-[24px]" />
-          ))}
+        <div className="mt-6 grid gap-4">
+          <SkeletonCard className="h-[120px] rounded-[24px]" />
+          <SkeletonCard className="h-[200px] rounded-[20px]" />
         </div>
       ) : nudges.length === 0 ? (
-        <div className="mt-6 rounded-[24px] border border-dashed border-white/10 bg-black/15 px-6 py-12 text-center">
-          <p className="text-base text-white">No nudges available yet.</p>
-          <p className="mt-2 text-sm text-slate-400">
-            Try refreshing to generate a fresh set of appliance recommendations for {city}.
+        <div className="mt-6 rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+          <p className="text-base text-gray-900">No recommendations available yet</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Tap "Refresh Data" to generate appliance timing suggestions for {city}.
           </p>
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {nudges.map((nudge, index) => {
-            const meta = APPLIANCE_META[nudge.appliance] || APPLIANCE_META.dryer;
+        <>
+          {/* Optimal Window hero */}
+          <div className="mt-8 rounded-[24px] border border-green-200 bg-green-50 p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-green-600">Optimal window</p>
+            <p className="mt-3 font-display text-3xl font-bold text-green-700">{windowTime}</p>
+            {windowMoer > 0 && (
+              <p className="mt-2 text-base text-green-600">
+                {Math.round(windowMoer)} lbs CO&#x2082;/MWh during this window
+              </p>
+            )}
+            <p className="mt-2 text-base text-slate-500">
+              Run all appliances in this window for lowest carbon output.
+            </p>
+          </div>
 
-            return (
-              <AnimatedContent key={`${nudge.appliance}-${index}`} delay={90 * index}>
-                <SpotlightCard className="card-solid hover-lift h-full overflow-hidden border border-white/10 p-4 sm:p-5">
-                  <div
-                    className="absolute inset-y-4 left-0 w-1 rounded-r-full"
-                    style={{ background: meta.color }}
-                  />
+          {/* Savings table */}
+          <div className="mt-8">
+            <h3 className="font-display text-lg font-semibold text-gray-900">
+              Expected Savings vs Running Right Now
+            </h3>
+            <p className="mt-2 text-base leading-relaxed text-slate-500">
+              Each row shows the typical energy per cycle for one appliance and the carbon and cost you save by running it during the optimal window instead of now.
+            </p>
 
-                  <div className="relative flex h-full min-h-[260px] flex-col gap-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div
-                          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-lg"
-                          style={{ background: `${meta.color}18`, color: meta.color }}
-                        >
-                          <span>{nudge.emoji || meta.icon}</span>
-                        </div>
+            <div className="mt-5 overflow-hidden rounded-[20px] border border-slate-200 divide-y divide-slate-100">
+              {/* Column header */}
+              <div className="flex items-center justify-between bg-slate-50 px-5 py-3">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Appliance</span>
+                <div className="flex items-center gap-6">
+                  <span className="min-w-[72px] text-right text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Per cycle</span>
+                  <span className="min-w-[80px] text-right text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">CO&#x2082; saved</span>
+                  <span className="min-w-[64px] text-right text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Cost</span>
+                </div>
+              </div>
 
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Appliance</p>
-                          <p className="mt-1 text-base font-semibold text-white sm:text-lg">{meta.label}</p>
-                        </div>
-                      </div>
+              {nudges.map((nudge) => {
+                const meta = APPLIANCE_META[nudge.appliance] || APPLIANCE_META.dryer;
+                const kwh = APPLIANCE_KWH[nudge.appliance] || 1.0;
+                const costPerCycle = (kwh * AVG_ELECTRICITY_COST_PER_KWH).toFixed(2);
 
-                      <span
-                        className="rounded-full border px-3 py-1 text-[11px] font-semibold"
-                        style={{
-                          color: meta.color,
-                          borderColor: `${meta.color}44`,
-                          background: `${meta.color}12`,
-                        }}
+                return (
+                  <div key={nudge.appliance} className="flex items-center justify-between bg-white px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-base"
+                        style={{ background: `${meta.color}18`, color: meta.color }}
                       >
-                        -{Math.round(nudge.co2_saved_grams || 0)}g CO2
+                        {nudge.emoji || meta.icon}
+                      </div>
+                      <span className="text-base font-medium text-gray-900">{meta.label}</span>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <span className="min-w-[72px] text-right text-sm text-slate-500">{kwh} kWh</span>
+                      <span className="min-w-[80px] text-right text-base font-semibold text-green-700">
+                        -{Math.round(nudge.co2_saved_grams || 0)}g CO&#x2082;
+                      </span>
+                      <span className="min-w-[64px] text-right text-sm font-medium text-slate-600">
+                        ${costPerCycle}
                       </span>
                     </div>
-
-                    <div className="rounded-[24px] border border-white/8 bg-black/20 px-4 py-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Best window</p>
-                      <p className="mt-2 font-display text-[1.65rem] font-semibold leading-tight text-grid-clean sm:text-[1.9rem]">
-                        {formatBestWindow(nudge)}
-                      </p>
-                    </div>
-
-                    <p className="flex-1 text-sm leading-6 text-slate-300">{nudge.message}</p>
                   </div>
-                </SpotlightCard>
-              </AnimatedContent>
-            );
-          })}
-        </div>
+                );
+              })}
+              {/* Total row */}
+              <div className="flex items-center justify-between bg-green-50 px-5 py-4">
+                <span className="text-base font-bold text-gray-900">Total (all appliances)</span>
+                <div className="flex items-center gap-6">
+                  <span className="min-w-[72px] text-right text-sm text-slate-500">{totalKwh.toFixed(1)} kWh</span>
+                  <span className="min-w-[80px] text-right text-base font-bold text-green-700">
+                    -{Math.round(totalCo2Saved)}g CO&#x2082;
+                  </span>
+                  <span className="min-w-[64px] text-right text-sm font-semibold text-slate-700">
+                    ${(totalKwh * AVG_ELECTRICITY_COST_PER_KWH).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* AI message */}
+          {bestNudge?.message && (
+            <p className="mt-6 text-base leading-7 text-slate-600">{bestNudge.message}</p>
+          )}
+        </>
       )}
 
-      <div className="mt-5">
+      <div className="mt-8">
         <DetailDisclosure
-          badge="Recommendation method"
-          title="How these recommendations are generated"
-          summary="Open for the distinction between physical measurements, derived carbon savings, and the language-model step."
+          badge="How savings are calculated"
+          title="Methodology, appliance energy, and cost assumptions"
+          summary="Formula, unit conversions, ENERGY STAR baseline values, and cost estimates."
         >
           <p>
-            <span className="font-semibold text-white">Observed inputs:</span> WattTime forecast values and current operating context.
+            <span className="font-semibold text-gray-900">Carbon formula:</span> CO&#x2082; saved (g) = appliance kWh × (current MOER − window MOER) × 453.592 g/lb ÷ 1000
           </p>
           <p>
-            <span className="font-semibold text-white">Derived quantities:</span> best timing windows and estimated carbon savings based on appliance load assumptions and the MOER difference between now and the suggested window.
+            <span className="font-semibold text-gray-900">Unit note:</span> 453.592 g/lb converts pounds to grams. Dividing by 1000 converts MWh to kWh.
           </p>
           <p>
-            <span className="font-semibold text-white">Generated layer:</span> Azure OpenAI converts those already-computed physical values into structured, readable instructions. The language model does not measure MOER, weather, or grid stress.
+            <span className="font-semibold text-gray-900">Typical energy per cycle:</span> EV charger 7.2 kWh, dryer 3.5 kWh, dishwasher 1.2 kWh, washer 0.5 kWh. These are ENERGY STAR median values representing how much electricity each appliance uses in a single run.
+          </p>
+          <p>
+            <span className="font-semibold text-gray-900">Cost estimate:</span> the cost column uses $0.16/kWh, the U.S. national average residential electricity rate (EIA, 2024). Your actual rate may differ.
+          </p>
+          <p>
+            <span className="font-semibold text-gray-900">Energy note:</span> These appliances use the same kWh regardless of when you run them. The savings shown are carbon savings only — your electricity bill stays the same.
+          </p>
+          <p>
+            <span className="font-semibold text-gray-900">Limitation:</span> Based on forecasted MOER. Actual savings depend on real-time grid conditions during the window.
           </p>
         </DetailDisclosure>
       </div>

@@ -60,6 +60,7 @@ class NudgeItem(BaseModel):
     best_window_end: str
     best_window_label: str
     co2_saved_grams: float
+    window_avg_moer: float = 0.0
     message: str
 
 

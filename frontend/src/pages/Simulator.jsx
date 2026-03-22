@@ -15,19 +15,19 @@ const SCENARIOS = [
     key: 'heat_wave',
     label: 'Heat wave',
     tone: '#ef4444',
-    description: 'High cooling demand pushes the grid toward its failure threshold.',
+    description: 'Sustained cooling demand stacks loads into the same peak hours, rapidly pushing the grid toward its stress limit.',
   },
   {
     key: 'cold_snap',
     label: 'Cold snap',
     tone: '#f59e0b',
-    description: 'Heating demand creates a sharp peak in carbon intensity and grid pressure.',
+    description: 'A sudden drop in temperature drives heating demand into a concentrated morning peak, raising both grid stress and carbon intensity.',
   },
   {
     key: 'normal',
     label: 'Normal day',
     tone: '#38bdf8',
-    description: 'A steady demand profile shows what the grid looks like without extreme weather.',
+    description: 'A baseline demand day with no weather extremes — a useful reference for comparing how much worse the stressed scenarios are.',
   },
 ];
 
@@ -66,15 +66,15 @@ function ScenarioButton({ item, active, onSelect }) {
   return (
     <button
       onClick={() => onSelect(item.key)}
-      className={`rounded-full border px-4 py-3 text-left transition ${
+      className={`min-h-[44px] rounded-full border px-4 py-3 text-left transition ${
         active
-          ? 'bg-white/[0.07] text-white'
-          : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20 hover:bg-white/[0.06]'
+          ? 'bg-slate-50 text-gray-900'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
       }`}
       style={active ? { borderColor: `${item.tone}55`, boxShadow: `0 0 0 1px ${item.tone}22 inset` } : undefined}
     >
       <span className="block text-sm font-semibold">{item.label}</span>
-      <span className="mt-1 block text-xs leading-6 text-slate-400">{item.description}</span>
+      <span className="mt-1 block text-xs leading-6 text-slate-500">{item.description}</span>
     </button>
   );
 }
@@ -164,20 +164,20 @@ export default function Simulator() {
         <AnimatedContent delay={60}>
           <button
             onClick={() => navigate(`/city/${encodeURIComponent(city)}`)}
-            className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/[0.06]"
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
           >
-            Back to dashboard
+            ← Back to dashboard
           </button>
         </AnimatedContent>
 
         <AnimatedContent delay={110} className="mt-6">
           <section className="card-glass p-6 sm:p-8">
-            <span className="section-kicker">Failure simulator</span>
+            <span className="section-kicker">Grid scenario simulator</span>
             <h1 className="section-title max-w-4xl">
-              See how <GradientText>{city}</GradientText> behaves when weather stress rises and what changes when GridSense shifts demand.
+              See how <GradientText>{city}</GradientText> responds to weather stress — and what changes when GridSense shifts demand to cleaner hours.
             </h1>
             <p className="section-subtitle max-w-3xl">
-              This page compares two timelines: unmanaged demand on the left and optimized demand on the right. The goal is to make the grid-failure story obvious even for someone who has never seen MOER or grid stress before.
+              Compare two timelines side by side: unmanaged demand on the left, and optimized demand on the right. Watch how shifting appliance usage prevents grid overload.
             </p>
           </section>
         </AnimatedContent>
@@ -187,7 +187,7 @@ export default function Simulator() {
             <span className="section-kicker">Choose a scenario</span>
             <h2 className="section-title">What kind of day are we simulating?</h2>
             <p className="section-subtitle">
-              Pick the weather condition that drives the demand curve. Heat waves are the strongest demo because they show how quickly the grid can tip into critical territory.
+              Pick the weather condition that drives the demand curve. Each scenario shows a different stress pattern so you can see how timing load shifts changes the outcome.
             </p>
 
             <div className="mt-6 grid gap-3 md:grid-cols-3">
@@ -217,7 +217,7 @@ export default function Simulator() {
                 <StarBorder className="w-fit">
                   <button
                     onClick={() => setPlaying((value) => !value)}
-                    className="rounded-full bg-[#0d2015] px-5 py-3 text-sm font-semibold text-grid-clean transition hover:bg-[#14301e]"
+                    className="rounded-full bg-green-50 px-5 py-3 text-sm font-semibold text-grid-clean transition hover:bg-green-100"
                   >
                     {playing ? 'Pause' : 'Play'}
                   </button>
@@ -228,7 +228,7 @@ export default function Simulator() {
                     setPlaying(false);
                     setFrame(0);
                   }}
-                  className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/[0.06]"
+                  className="rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
                 >
                   Reset
                 </button>
@@ -256,8 +256,22 @@ export default function Simulator() {
 
         {loading ? (
           <AnimatedContent delay={280} className="mt-8 grid gap-6 xl:grid-cols-2">
-            <SkeletonCard className="h-[420px] rounded-[28px]" />
-            <SkeletonCard className="h-[420px] rounded-[28px]" />
+            <SkeletonCard className="h-[420px] rounded-[28px]" aria-label="Loading simulation timeline" />
+            <SkeletonCard className="h-[420px] rounded-[28px]" aria-label="Loading optimized timeline" />
+          </AnimatedContent>
+        ) : !simulation ? (
+          <AnimatedContent delay={280} className="mt-8">
+            <div className="card-glass flex flex-col items-center justify-center px-8 py-16 text-center">
+              <svg width="80" height="80" viewBox="0 0 80 80" fill="none" role="img" aria-label="No simulation data">
+                <circle cx="40" cy="40" r="36" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="6 4" />
+                <path d="M28 50 L40 30 L52 50" stroke="#3B8BD4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <circle cx="40" cy="56" r="2" fill="#3B8BD4" />
+              </svg>
+              <p className="mt-6 text-lg font-semibold text-gray-900">No simulation data available</p>
+              <p className="mt-2 max-w-md text-sm text-slate-500">
+                Select a scenario above and the simulation will load automatically. If data fails to load, check your connection and try refreshing.
+              </p>
+            </div>
           </AnimatedContent>
         ) : (
           <>
@@ -266,17 +280,17 @@ export default function Simulator() {
                 <section className="card-solid relative overflow-hidden p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-300">Without GridSense</p>
-                      <h2 className="mt-3 text-2xl font-semibold text-white">Demand follows the spike</h2>
-                      <p className="mt-2 text-sm leading-7 text-slate-300">
-                        This is the unmanaged version of the day. Loads stack into the same hot hours, which pushes the grid toward its failure threshold.
+                      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-500">Without GridSense</p>
+                      <h2 className="mt-4 font-display text-2xl font-semibold text-gray-900 sm:text-3xl">Demand follows the spike</h2>
+                      <p className="mt-3 text-base leading-7 text-slate-600">
+                        Demand follows its natural curve with no load shifting. High-draw appliances run whenever they're scheduled, concentrating stress in the peak window.
                       </p>
                     </div>
 
-                    <span className="metric-chip">Natural demand</span>
+                    <span className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600">Natural demand</span>
                   </div>
 
-                  <div className="mt-8 rounded-[26px] border border-white/8 bg-black/20 p-4">
+                  <div className="mt-8 rounded-[26px] border border-slate-200 bg-slate-50 p-4">
                     <GridStressGauge value={current?.grid_stress || 0} />
                   </div>
 
@@ -292,13 +306,15 @@ export default function Simulator() {
                     </div>
 
                     <span
-                      className="rounded-full border px-3 py-1 text-sm font-semibold"
+                      className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold"
                       style={{
                         color: failureActive ? '#f87171' : '#fca5a5',
                         borderColor: failureActive ? 'rgba(239,68,68,0.35)' : 'rgba(248,113,113,0.22)',
                         background: failureActive ? 'rgba(127,29,29,0.35)' : 'rgba(239,68,68,0.08)',
                       }}
                     >
+                      <span aria-hidden="true">{failureActive ? '\u25B2' : '\u25C9'}</span>
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: failureActive ? '#f87171' : '#fca5a5' }} />
                       {failureActive ? 'Grid failure' : 'Unmanaged load'}
                     </span>
                   </div>
@@ -308,9 +324,9 @@ export default function Simulator() {
                   </div>
 
                   {failureActive && (
-                    <div className="mt-6 rounded-[24px] border border-red-500/40 bg-red-950/40 px-5 py-4" style={{ animation: 'fadeIn 0.45s ease-out both' }}>
-                      <p className="text-base font-semibold text-red-300">GRID FAILURE</p>
-                      <p className="mt-2 text-sm leading-7 text-red-100/80">
+                    <div className="mt-6 rounded-[24px] border border-red-300 bg-red-50 px-5 py-4" style={{ animation: 'fadeIn 0.45s ease-out both' }}>
+                      <p className="text-base font-semibold text-red-700">GRID FAILURE</p>
+                      <p className="mt-2 text-sm leading-7 text-red-600">
                         Demand crossed the critical threshold. This is the moment rolling blackouts or emergency interventions become plausible in the scenario.
                       </p>
                     </div>
@@ -320,21 +336,21 @@ export default function Simulator() {
 
               <AnimatedContent delay={340}>
                 <section className="card-solid relative overflow-hidden p-6">
-                  <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.18),transparent_60%)]" />
+                  <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.10),transparent_60%)]" />
 
                   <div className="relative flex items-start justify-between gap-4">
                     <div>
                       <p className="text-sm font-semibold uppercase tracking-[0.24em] text-grid-clean">With GridSense</p>
-                      <h2 className="mt-3 text-2xl font-semibold text-white">Demand shifts into cleaner hours</h2>
-                      <p className="mt-2 text-sm leading-7 text-slate-300">
-                        This optimized path moves flexible demand out of the dirtiest, highest-stress window and into cleaner hours where the grid has room to breathe.
+                      <h2 className="mt-4 font-display text-2xl font-semibold text-gray-900 sm:text-3xl">Demand shifts into cleaner hours</h2>
+                      <p className="mt-3 text-base leading-7 text-slate-600">
+                        Flexible demand is shifted into lower-carbon, lower-stress windows. The same appliances run the same total energy — just at better times.
                       </p>
                     </div>
 
-                    <span className="metric-chip">Shifted load</span>
+                    <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-grid-clean">Shifted load</span>
                   </div>
 
-                  <div className="mt-8 rounded-[26px] border border-white/8 bg-black/20 p-4">
+                  <div className="mt-8 rounded-[26px] border border-slate-200 bg-slate-50 p-4">
                     <GridStressGauge value={shifted?.grid_stress || 0} />
                   </div>
 
@@ -349,7 +365,9 @@ export default function Simulator() {
                       </p>
                     </div>
 
-                    <span className="rounded-full border border-grid-clean/30 bg-grid-clean/10 px-3 py-1 text-sm font-semibold text-grid-clean">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-grid-clean/30 bg-grid-clean/10 px-3 py-1 text-sm font-semibold text-grid-clean">
+                      <span aria-hidden="true">&#x2713;</span>
+                      <span className="h-2.5 w-2.5 rounded-full bg-grid-clean" />
                       Grid stable
                     </span>
                   </div>
@@ -366,25 +384,25 @@ export default function Simulator() {
                 <span className="section-kicker">Impact summary</span>
                 <h2 className="section-title">What changed because the load moved?</h2>
                 <p className="section-subtitle">
-                  These live counters explain the operational difference between the two timelines. This is the section that makes the demo concrete for judges and first-time visitors.
+                  These live counters show the concrete operational difference between the two timelines — how much carbon was avoided, and how much demand was successfully moved to cleaner hours.
                 </p>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-3">
                   <div className="card-solid p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current hour</p>
-                    <p className="mt-3 font-display text-4xl font-semibold text-white">{displayHour}</p>
-                    <p className="mt-2 text-sm leading-7 text-slate-400">The playback position through the simulated day.</p>
+                    <p className="mt-3 font-display text-4xl font-semibold text-gray-900">{displayHour}</p>
+                    <p className="mt-2 text-base leading-7 text-slate-500">The playback position through the simulated day.</p>
                   </div>
 
                   <div className="card-solid p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">CO2 saved so far</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">CO&#x2082; saved so far</p>
                     <CountUp
                       value={liveSavings}
                       decimals={1}
                       suffix=" kg"
                       className="mt-3 block font-display text-4xl font-semibold text-grid-clean"
                     />
-                    <p className="mt-2 text-sm leading-7 text-slate-400">Cumulative avoided emissions from shifting load away from the dirtiest window.</p>
+                    <p className="mt-2 text-base leading-7 text-slate-500">Cumulative avoided emissions from shifting load away from the dirtiest window.</p>
                   </div>
 
                   <div className="card-solid p-5">
@@ -393,9 +411,9 @@ export default function Simulator() {
                       value={liveShifted}
                       decimals={0}
                       suffix=" kWh"
-                      className="mt-3 block font-display text-4xl font-semibold text-sky-300"
+                      className="mt-3 block font-display text-4xl font-semibold text-sky-600"
                     />
-                    <p className="mt-2 text-sm leading-7 text-slate-400">Flexible demand moved into lower-stress hours as the simulation progresses.</p>
+                    <p className="mt-2 text-base leading-7 text-slate-500">Flexible demand moved into lower-stress hours as the simulation progresses.</p>
                   </div>
                 </div>
               </section>
@@ -405,8 +423,8 @@ export default function Simulator() {
       </main>
 
       {error && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-amber-400/20 bg-[#23180d]/95 px-4 py-2 text-sm text-amber-100 shadow-xl">
-          Simulation data failed to load cleanly. The page may be showing fallback data.
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-yellow-300 bg-yellow-50 px-4 py-2 text-sm text-yellow-900 shadow-xl">
+          Unable to load simulation data — check your connection and try refreshing. The page may be showing fallback data.
         </div>
       )}
     </div>
