@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from backend.mock_data import MOCK_REGION, build_mock_simulation, get_mock_forecast
+from backend.mock_data import MOCK_REGION, build_mock_simulation, get_mock_forecast, get_mock_intensity
 from backend import main
 from backend.nudge_engine import NudgeEngine
 from backend.window_utils import build_best_window_meta, format_window_label, parse_iso_timestamp
@@ -125,6 +125,48 @@ class HardcodedForecastTests(unittest.TestCase):
 
         self.assertEqual([row["moer"] for row in first], [row["moer"] for row in second])
         self.assertEqual(len(first), 24)
+
+    def test_cleaner_window_score_gap_is_within_target_range(self) -> None:
+        first = get_mock_forecast(MOCK_REGION, "Austin")
+        second = get_mock_forecast(MOCK_REGION, "Austin")
+
+        def score_gap(forecast: list[dict]) -> float:
+            current_score = float(forecast[0]["clean_power_score"])
+            meta = build_best_window_meta(forecast)
+            window_score = sum(float(point["clean_power_score"]) for point in meta["points"]) / len(meta["points"])
+            return round(window_score - current_score, 1)
+
+        first_gap = score_gap(first)
+        second_gap = score_gap(second)
+
+        self.assertGreaterEqual(first_gap, 10.0)
+        self.assertLessEqual(first_gap, 30.0)
+        self.assertEqual(first_gap, second_gap)
+
+    def test_mock_intensity_matches_forecast_baseline_score(self) -> None:
+        forecast = get_mock_forecast(MOCK_REGION, "San Francisco")
+        intensity = get_mock_intensity("San Francisco")
+
+        self.assertEqual(float(intensity["moer"]), float(forecast[0]["moer"]))
+        self.assertEqual(float(intensity["clean_power_score"]), float(forecast[0]["clean_power_score"]))
+        self.assertEqual(float(intensity["grid_stress"]), float(build_mock_simulation("San Francisco", "normal")["timeline"][0]["grid_stress"]))
+
+    def test_mock_intensity_is_stable_for_same_city(self) -> None:
+        first = get_mock_intensity("Austin")
+        second = get_mock_intensity("Austin")
+
+        self.assertEqual(float(first["clean_power_score"]), float(second["clean_power_score"]))
+        self.assertEqual(float(first["grid_stress"]), float(second["grid_stress"]))
+
+    def test_regional_score_and_pressure_ordering_is_plausible(self) -> None:
+        san_francisco = get_mock_intensity("San Francisco")
+        austin = get_mock_intensity("Austin")
+        chicago = get_mock_intensity("Chicago")
+
+        self.assertGreater(float(san_francisco["clean_power_score"]), float(austin["clean_power_score"]))
+        self.assertGreater(float(austin["clean_power_score"]), float(chicago["clean_power_score"]))
+        self.assertLess(float(san_francisco["grid_stress"]), float(austin["grid_stress"]))
+        self.assertLess(float(austin["grid_stress"]), float(chicago["grid_stress"]))
 
 
 if __name__ == "__main__":

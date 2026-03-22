@@ -232,6 +232,11 @@ async def _fetch_intensity_payload(city: str, use_cache: bool = True) -> dict:
         if cached:
             return cached
 
+    if use_mock_data():
+        result = get_mock_intensity(city)
+        _cache_set(cache_key, result)
+        return result
+
     try:
         lat, lng, region = await _resolve_city(city)
         realtime = await watttime.get_realtime(region)
