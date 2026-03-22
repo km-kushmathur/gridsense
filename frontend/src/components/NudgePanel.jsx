@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchNudges } from '../api/gridsense';
 import { SkeletonCard } from './SkeletonCard';
 import { AnimatedContent } from './ui/AnimatedContent';
+import { DetailDisclosure } from './ui/DetailDisclosure';
 import { SpotlightCard } from './ui/SpotlightCard';
 import { StarBorder } from './ui/StarBorder';
 
@@ -80,9 +81,12 @@ export function NudgePanel({ city }) {
     <div className="card-glass p-6 sm:p-7">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
+          <div className="flex flex-wrap gap-2">
+            <span className="taxonomy-chip taxonomy-chip-generated">Generated recommendation</span>
+          </div>
           <p className="panel-title">Smart appliance nudges</p>
           <p className="panel-subtitle">
-            This panel turns forecast data into plain-language recommendations. The goal is simple: know what to run, when to run it, and how much carbon that move could avoid.
+            Forecasted low-MOER windows are converted into appliance timing recommendations so the operational action is immediately clear.
           </p>
         </div>
 
@@ -172,6 +176,24 @@ export function NudgePanel({ city }) {
           })}
         </div>
       )}
+
+      <div className="mt-5">
+        <DetailDisclosure
+          badge="Recommendation method"
+          title="How these recommendations are generated"
+          summary="Open for the distinction between physical measurements, derived carbon savings, and the language-model step."
+        >
+          <p>
+            <span className="font-semibold text-white">Observed inputs:</span> WattTime forecast values and current operating context.
+          </p>
+          <p>
+            <span className="font-semibold text-white">Derived quantities:</span> best timing windows and estimated carbon savings based on appliance load assumptions and the MOER difference between now and the suggested window.
+          </p>
+          <p>
+            <span className="font-semibold text-white">Generated layer:</span> Azure OpenAI converts those already-computed physical values into structured, readable instructions. The language model does not measure MOER, weather, or grid stress.
+          </p>
+        </DetailDisclosure>
+      </div>
     </div>
   );
 }

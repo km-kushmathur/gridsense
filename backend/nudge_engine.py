@@ -78,7 +78,7 @@ class NudgeEngine:
     ) -> list[dict]:
         """Build deterministic nudges when AI is unavailable."""
         cleanest = self._find_cleanest_windows(forecast, n=len(APPLIANCE_KWH))
-        fallback_windows = cleanest or [{"time": "later tonight", "moer": current_moer, "pct_renewable": 0.5}]
+        fallback_windows = cleanest or [{"time": "later tonight", "moer": current_moer, "clean_power_score": 50.0}]
         nudges: list[dict] = []
         appliances = list(APPLIANCE_KWH.keys())
         temp_c = round(float((current_weather or {}).get("temp_c", 24.0)))
@@ -87,7 +87,7 @@ class NudgeEngine:
             window = fallback_windows[index % len(fallback_windows)]
             best_time = str(window.get("time", "later tonight"))
             best_moer = float(window.get("moer", current_moer))
-            pct_renewable = round(float(window.get("pct_renewable", 0.5)) * 100)
+            clean_power_score = round(float(window.get("clean_power_score", 50.0)))
             nudges.append({
                 "appliance": appliance,
                 "emoji": APPLIANCE_EMOJI[appliance],
@@ -95,7 +95,7 @@ class NudgeEngine:
                 "co2_saved_grams": self._calculate_co2_saved(appliance, current_moer, best_moer),
                 "message": (
                     f"Run your {appliance.replace('_', ' ')} at {best_time} "
-                    f"when the grid is about {pct_renewable}% renewable and {temp_c}C."
+                    f"when the clean-power score is about {clean_power_score}/100 and {temp_c}C."
                 ),
             })
 
@@ -113,7 +113,7 @@ class NudgeEngine:
         cleanest = self._find_cleanest_windows(forecast)
         cleanest_summary = "\n".join(
             f"- {w.get('time', 'N/A')}: MOER={w.get('moer', 0)}, "
-            f"renewable={w.get('pct_renewable', 0):.0%}"
+            f"clean_score={float(w.get('clean_power_score', 50.0)):.0f}/100"
             for w in cleanest
         )
 
@@ -126,7 +126,7 @@ class NudgeEngine:
             "Use each appliance exactly once: dishwasher, washer, ev_charger, dryer.\n"
             "Return a JSON object with key nudges.\n"
             "Each nudge should include appliance, best_time, and message.\n"
-            "Keep each message under 30 words and mention either renewable share or carbon intensity.\n"
+            "Keep each message under 30 words and mention carbon intensity or the clean-power score.\n"
             "Use one of the supplied times for best_time."
         )
 

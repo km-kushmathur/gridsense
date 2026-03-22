@@ -52,6 +52,7 @@ class DemandSimulator:
             temp_c = float(weather_row.get("temp_c", 22.0))
             moer = float(moer_row.get("moer", 0.0))
             pct_renewable = float(moer_row.get("pct_renewable", 0.0))
+            clean_power_score = float(moer_row.get("clean_power_score", pct_renewable * 100.0))
             time_factor = 0.2 if hour in {7, 8, 9} else 0.15 if hour in {18, 19, 20, 21} else 0.0
             demand_index = (0.5 + abs(temp_c - 22.0) * 0.03 + time_factor) * multiplier
             timeline.append({
@@ -61,6 +62,7 @@ class DemandSimulator:
                 "demand_index": round(demand_index, 2),
                 "moer": round(moer, 1),
                 "pct_renewable": round(pct_renewable, 2),
+                "clean_power_score": round(clean_power_score, 1),
                 "grid_stress": self._grid_stress(demand_index, moer),
             })
 

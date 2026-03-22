@@ -4,12 +4,14 @@ import os
 import time
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from .demand_simulator import DemandSimulator
     from .geo_utils import geocode_city
+    from .grid_utils import emissions_band_from_score, region_label_for
+    from .map_service import fetch_static_map
     from .models import (
         ForecastPoint,
         HealthResponse,
@@ -28,6 +30,8 @@ try:
 except ImportError:
     from demand_simulator import DemandSimulator
     from geo_utils import geocode_city
+    from grid_utils import emissions_band_from_score, region_label_for
+    from map_service import fetch_static_map
     from models import (
         ForecastPoint,
         HealthResponse,
@@ -81,11 +85,7 @@ def _cache_set(key: str, value: object) -> None:
 
 
 def _status_from_green_score(green_score: float) -> str:
-    if green_score > 60:
-        return "clean"
-    if green_score > 30:
-        return "moderate"
-    return "dirty"
+    return emissions_band_from_score(green_score)
 
 
 async def _resolve_city(city: str) -> tuple[float, float, str]:
@@ -109,14 +109,27 @@ def _mock_or_raise(city: str, endpoint: str, exc: Exception) -> object:
     raise exc
 
 
-def _build_intensity_result(city: str, region: str, realtime: dict, weather_now: dict, heat_wave: bool) -> dict:
+def _build_intensity_result(
+    city: str,
+    lat: float,
+    lng: float,
+    region: str,
+    realtime: dict,
+    weather_now: dict,
+    heat_wave: bool,
+) -> dict:
     """Merge realtime and weather data into the intensity payload."""
     green_score = float(realtime.get("green_score", 50.0))
+    clean_power_score = float(realtime.get("clean_power_score", green_score))
     return {
         "city": city,
         "region": region,
+        "region_label": region_label_for(region),
+        "latitude": lat,
+        "longitude": lng,
         "moer": float(realtime.get("moer", 0)),
         "pct_renewable": float(realtime.get("pct_renewable", 0)),
+        "clean_power_score": clean_power_score,
         "green_score": green_score,
         "status": _status_from_green_score(green_score),
         "temp_c": float(weather_now.get("temp_c", 22.0)),
@@ -147,7 +160,7 @@ async def get_intensity(city: str = Query(..., description="City name to look up
         realtime = await watttime.get_realtime(region)
         weather_now = await weather.get_current(lat, lng, city)
         heat_wave = await weather.is_heat_wave(lat, lng, city)
-        result = _build_intensity_result(city, region, realtime, weather_now, heat_wave)
+        result = _build_intensity_result(city, lat, lng, region, realtime, weather_now, heat_wave)
     except ValueError:
         result = _mock_or_raise(city, "intensity", ValueError(f"Could not geocode city: {city}"))
     except Exception as exc:
@@ -205,7 +218,15 @@ async def get_nudges(body: NudgeRequest) -> NudgeResponse:
     except Exception:
         payload = {
             "nudges": await nudge_engine.generate_nudges(
-                forecast=[{"time": row["time"], "moer": row["moer"], "pct_renewable": row["pct_renewable"]} for row in build_mock_simulation(body.city, "normal")["timeline"]],
+                forecast=[
+                    {
+                        "time": row["time"],
+                        "moer": row["moer"],
+                        "pct_renewable": row["pct_renewable"],
+                        "clean_power_score": row["clean_power_score"],
+                    }
+                    for row in build_mock_simulation(body.city, "normal")["timeline"]
+                ],
                 city=body.city,
                 current_weather=get_mock_weather_response(body.city),
                 current_moer=float(get_mock_intensity(body.city)["moer"]),
@@ -234,6 +255,31 @@ async def simulate_grid(body: SimulateRequest) -> SimulateResponse:
 
     _cache_set(cache_key, payload)
     return SimulateResponse(**payload)
+
+
+@app.get("/api/map/static")
+async def get_static_map(city: str = Query(..., description="City name to look up")) -> Response:
+    """Return a static map image for the selected city."""
+    cache_key = f"{city.lower()}:map-static"
+    cached = _cache_get(cache_key)
+    if cached:
+        return Response(
+            content=cached["content"],
+            media_type=cached["media_type"],
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
+    try:
+        lat, lng = await geocode_city(city)
+        content, media_type = await fetch_static_map(lat, lng, city)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Static map unavailable.") from exc
+
+    payload = {"content": content, "media_type": media_type}
+    _cache_set(cache_key, payload)
+    return Response(content=content, media_type=media_type, headers={"Cache-Control": "public, max-age=300"})
 
 
 @app.get("/api/weather", response_model=WeatherResponse)

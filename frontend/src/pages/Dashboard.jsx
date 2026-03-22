@@ -5,9 +5,11 @@ import { CityMap } from '../components/CityMap';
 import { ForecastChart } from '../components/ForecastChart';
 import { GridStressGauge } from '../components/GridStressGauge';
 import { IntensityBadge } from '../components/IntensityBadge';
+import { MethodologyPanel } from '../components/MethodologyPanel';
 import { NudgePanel } from '../components/NudgePanel';
 import { TopBar } from '../components/TopBar';
 import { AnimatedContent } from '../components/ui/AnimatedContent';
+import { DetailDisclosure } from '../components/ui/DetailDisclosure';
 import { GradientText } from '../components/ui/GradientText';
 import { useForecast } from '../hooks/useForecast';
 import { useGridData } from '../hooks/useGridData';
@@ -116,7 +118,7 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-grid-clean">Welcome to GridSense</p>
                 <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">
-                  This dashboard is organized to answer a newcomer’s questions in order: how clean the grid is right now, what is affecting it, when the next clean window arrives, and what actions reduce stress on the system.
+                  Start with the live carbon signal, then use the forecast and recommendations to decide when flexible demand should move. Formulas, source details, and limitations stay available through the reference layer below.
                 </p>
               </div>
 
@@ -134,61 +136,50 @@ export default function Dashboard() {
           <section className="mb-10">
             <span className="section-kicker">Grid overview</span>
             <h1 className="section-title max-w-4xl">
-              Understand <GradientText>{city}</GradientText> in one pass, from current carbon intensity to the cleanest time to shift demand.
+              A layered operating view of <GradientText>{city}</GradientText>, built around the live carbon signal first.
             </h1>
             <p className="section-subtitle max-w-3xl">
-              Each section below explains one layer of the story. If you are new to the project, start with the renewable share, then use the forecast and nudges panels to decide what to run later.
+              The main dashboard prioritizes the current signal, the next 24-hour forecast, map context, and appliance timing recommendations. Scientific definitions and derivations remain available without crowding the primary reading path.
             </p>
           </section>
         </AnimatedContent>
 
-        <AnimatedContent delay={140}>
-          <section className="mb-10">
-            <span className="section-kicker">Grid status</span>
-            <h2 className="section-title">How clean is your electricity right now?</h2>
-            <p className="section-subtitle">
-              This is the headline state of the grid at the current moment. A greener score means cleaner power is carrying more of the load.
-            </p>
-
-            <div className="mt-6">
-              <IntensityBadge
-                data={gridData}
-                loading={gridLoading}
-                onSimulate={() => navigate(`/city/${encodeURIComponent(city)}/simulate`)}
-              />
-            </div>
-          </section>
-        </AnimatedContent>
-
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_380px]">
-          <AnimatedContent delay={180}>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_380px]">
+          <AnimatedContent delay={140}>
             <section>
-              <span className="section-kicker">Grid map</span>
-              <h2 className="section-title">Where the local grid pulse is centered</h2>
+              <span className="section-kicker">Current signal</span>
+              <h2 className="section-title">Live carbon signal and normalized operating score</h2>
               <p className="section-subtitle">
-                The map panel is a quick visual explanation of the current signal. It helps a visitor connect the abstract carbon number to a place they recognize.
+                Read the observed Marginal Operating Emissions Rate first. The normalized score sits beside it as a compact ranking layer for timing decisions.
               </p>
 
               <div className="mt-6">
-                <CityMap data={gridData} cityName={city} loading={gridLoading} />
+                <IntensityBadge
+                  data={gridData}
+                  loading={gridLoading}
+                  onSimulate={() => navigate(`/city/${encodeURIComponent(city)}/simulate`)}
+                />
               </div>
             </section>
           </AnimatedContent>
 
-          <AnimatedContent delay={240}>
+          <AnimatedContent delay={180}>
             <section>
               <span className="section-kicker">Current conditions</span>
-              <h2 className="section-title">What is pushing the grid right now?</h2>
+              <h2 className="section-title">Weather and operating pressure</h2>
               <p className="section-subtitle">
-                Weather, carbon intensity, and load pressure all change how urgent it is to shift demand. This card summarizes those drivers in plain language.
+                Weather is directly observed. Heat-wave pressure and grid stress are local interpretation layers that help prioritize load shifting.
               </p>
 
               <div className="card-solid mt-6 p-6">
                 <div className="grid gap-6">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current state</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">{statusLabel}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="taxonomy-chip taxonomy-chip-observed">Observed weather</span>
+                        <span className="taxonomy-chip taxonomy-chip-derived">Derived pressure</span>
+                      </div>
+                      <p className="mt-3 text-2xl font-semibold text-white">{statusLabel}</p>
                     </div>
                     <span
                       className="rounded-full border px-3 py-1 text-sm font-semibold"
@@ -224,6 +215,22 @@ export default function Dashboard() {
                       valueStyle={{ color: heatWave ? '#f87171' : '#86efac' }}
                     />
                   </div>
+
+                  <DetailDisclosure
+                    badge="Condition method"
+                    title="Observed weather vs derived operating pressure"
+                    summary="Open for the heat-wave rule, the meaning of grid stress, and what this panel should be used for."
+                  >
+                    <p>
+                      <span className="font-semibold text-white">Observed values:</span> air temperature and weather summary come from Open-Meteo.
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">Derived values:</span> heat-wave pressure is triggered when any next-24-hour forecast temperature exceeds 35°C. Grid stress is a local heuristic for operational pressure, not a utility control-room measurement.
+                    </p>
+                    <p>
+                      <span className="font-semibold text-white">Use:</span> combine this panel with the MOER forecast to decide how urgent it is to move flexible load away from hotter, higher-pressure hours.
+                    </p>
+                  </DetailDisclosure>
                 </div>
               </div>
             </section>
@@ -233,9 +240,9 @@ export default function Dashboard() {
         <AnimatedContent delay={300} className="mt-10">
           <section>
             <span className="section-kicker">24-hour forecast</span>
-            <h2 className="section-title">Plan your energy use around the cleanest hours</h2>
+            <h2 className="section-title">Next 24 hours of carbon timing</h2>
             <p className="section-subtitle">
-              This forecast shows when carbon intensity dips. Lower MOER periods are the best opportunities to shift EV charging, laundry, or other flexible demand.
+              Use the forecast to identify the lowest-emission window before shifting EV charging, laundry, or other flexible demand.
             </p>
 
             <div className="mt-6">
@@ -244,18 +251,38 @@ export default function Dashboard() {
           </section>
         </AnimatedContent>
 
-        <AnimatedContent delay={360} className="mt-10">
-          <section>
-            <span className="section-kicker">Smart nudges</span>
-            <h2 className="section-title">AI-powered recommendations a newcomer can act on immediately</h2>
-            <p className="section-subtitle">
-              Instead of making you interpret the chart alone, GridSense converts the forecast into specific appliance timing suggestions with a clear time and expected carbon impact.
-            </p>
+        <div className="mt-10 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_0.85fr]">
+          <AnimatedContent delay={360}>
+            <section>
+              <span className="section-kicker">Map context</span>
+              <h2 className="section-title">Geographic context for the serving balancing region</h2>
+              <p className="section-subtitle">
+                The map anchors the city geographically and shows where the region-level carbon signal applies. It is contextual, not neighborhood telemetry.
+              </p>
 
-            <div className="mt-6">
-              <NudgePanel city={city} />
-            </div>
-          </section>
+              <div className="mt-6">
+                <CityMap data={gridData} cityName={city} loading={gridLoading} />
+              </div>
+            </section>
+          </AnimatedContent>
+
+          <AnimatedContent delay={400}>
+            <section>
+              <span className="section-kicker">Recommendations</span>
+              <h2 className="section-title">Actionable timing guidance</h2>
+              <p className="section-subtitle">
+                Recommendations are generated only after the physical and derived layers are computed, so the action stays tied to documented signals.
+              </p>
+
+              <div className="mt-6">
+                <NudgePanel city={city} />
+              </div>
+            </section>
+          </AnimatedContent>
+        </div>
+
+        <AnimatedContent delay={440} className="mt-10">
+          <MethodologyPanel gridData={gridData} weather={weather} forecast={forecast} />
         </AnimatedContent>
       </main>
 

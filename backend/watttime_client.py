@@ -7,9 +7,11 @@ from datetime import datetime, timezone
 import httpx
 
 try:
+    from .grid_utils import clean_power_score_from_moer
     from .mock_data import MOCK_REGION, get_mock_forecast, get_mock_realtime
     from .settings import use_mock_data
 except ImportError:
+    from grid_utils import clean_power_score_from_moer
     from mock_data import MOCK_REGION, get_mock_forecast, get_mock_realtime
     from settings import use_mock_data
 
@@ -118,11 +120,12 @@ class WattTimeClient:
             if not isinstance(point, dict):
                 continue
             moer_val = float(point.get("value", 0))
-            green = max(0, min(100, 100 - (moer_val - 200) / 10))
+            clean_power_score = clean_power_score_from_moer(moer_val)
             forecast.append({
                 "time": point.get("point_time", datetime.now(timezone.utc).isoformat()),
                 "moer": moer_val,
-                "pct_renewable": round(green / 100, 2),
+                "pct_renewable": round(clean_power_score / 100, 2),
+                "clean_power_score": clean_power_score,
             })
 
         if any(float(row["moer"]) > 0.0 for row in forecast):
@@ -179,18 +182,18 @@ class WattTimeClient:
             points = [data]
 
         if not points:
-            return {"moer": 0, "pct_renewable": 0.0, "green_score": 50}
+            return {"moer": 0, "pct_renewable": 0.0, "clean_power_score": 50.0, "green_score": 50.0}
 
         latest = points[0] if isinstance(points[0], dict) else {}
         moer = float(latest.get("value", 0))
 
-        # Normalize to green score: 200 = 100 (very clean), 1200 = 0 (very dirty)
-        green_score = max(0, min(100, 100 - (moer - 200) / 10))
+        green_score = clean_power_score_from_moer(moer)
         pct_renewable = round(green_score / 100, 2)
 
         result = {
             "moer": moer,
             "pct_renewable": pct_renewable,
+            "clean_power_score": green_score,
             "green_score": round(green_score, 1),
         }
 

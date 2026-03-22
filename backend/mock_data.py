@@ -2,6 +2,11 @@
 
 from datetime import datetime, timedelta, timezone
 
+try:
+    from .grid_utils import clean_power_score_from_moer, emissions_band_from_score, region_label_for
+except ImportError:
+    from grid_utils import clean_power_score_from_moer, emissions_band_from_score, region_label_for
+
 MOCK_CITY_COORDS: dict[str, tuple[float, float]] = {
     "sacramento": (38.5816, -121.4944),
     "san francisco": (37.7749, -122.4194),
@@ -35,7 +40,7 @@ def get_mock_coordinates(city: str) -> tuple[float, float]:
 
 
 def _green_score(moer: float) -> float:
-    return round(max(0, min(100, 100 - (moer - 200) / 10)), 1)
+    return clean_power_score_from_moer(moer)
 
 
 def _condition(temp_c: float) -> str:
@@ -56,6 +61,7 @@ def get_mock_realtime(region: str) -> dict[str, float]:
     return {
         "moer": moer,
         "pct_renewable": round(green_score / 100, 2),
+        "clean_power_score": green_score,
         "green_score": green_score,
     }
 
@@ -72,6 +78,7 @@ def get_mock_forecast(region: str) -> list[dict[str, float | str]]:
             "time": point_time.isoformat(),
             "moer": moer,
             "pct_renewable": round(green_score / 100, 2),
+            "clean_power_score": green_score,
         })
     return forecast
 
@@ -123,12 +130,17 @@ def get_mock_intensity(city: str) -> dict[str, float | str | bool]:
     realtime = get_mock_realtime(MOCK_REGION)
     weather = get_mock_weather_response(city)
     green_score = float(realtime["green_score"])
-    status = "clean" if green_score > 60 else "moderate" if green_score > 30 else "dirty"
+    lat, lng = get_mock_coordinates(city)
+    status = emissions_band_from_score(green_score)
     return {
         "city": city,
         "region": MOCK_REGION,
+        "region_label": region_label_for(MOCK_REGION),
+        "latitude": lat,
+        "longitude": lng,
         "moer": float(realtime["moer"]),
         "pct_renewable": float(realtime["pct_renewable"]),
+        "clean_power_score": green_score,
         "green_score": green_score,
         "status": status,
         "temp_c": float(weather["temp_c"]),
@@ -164,6 +176,7 @@ def build_mock_simulation(city: str, scenario: str) -> dict[str, object]:
             "temp_c": temp_c,
             "moer": moer,
             "pct_renewable": float(point["pct_renewable"]),
+            "clean_power_score": float(point["clean_power_score"]),
         }
         timeline.append({
             **base_row,

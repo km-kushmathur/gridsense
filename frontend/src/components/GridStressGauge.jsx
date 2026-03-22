@@ -86,10 +86,6 @@ export function GridStressGauge({ value = 0 }) {
         {/* Center pivot */}
         <circle cx={cx} cy={cy} r="4" fill="#1A1D27" stroke="#D0D0CE" strokeWidth="1.5" />
 
-        {/* Scale labels */}
-        <text x="15" y="80" style={{ fontSize: 9, fill: '#22C55E' }}>Safe</text>
-        <text x="106" y="80" style={{ fontSize: 9, fill: '#EF4444' }}>Critical</text>
-
         <text x="70" y="60" textAnchor="middle" style={{ fontSize: 18, fontWeight: 700, fill: color }}>
           {Math.round(clamped)}%
         </text>
@@ -100,6 +96,14 @@ export function GridStressGauge({ value = 0 }) {
           </text>
         )}
       </svg>
+      <div className="mt-1 flex w-full max-w-[150px] items-center justify-between text-[10px] font-semibold uppercase tracking-[0.18em]">
+        <span className="rounded-full border border-grid-clean/25 bg-grid-clean/10 px-2 py-1 text-grid-clean">
+          Safe
+        </span>
+        <span className="rounded-full border border-red-500/25 bg-red-500/10 px-2 py-1 text-red-300">
+          Critical
+        </span>
+      </div>
       <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">Grid stress</p>
     </div>
   );

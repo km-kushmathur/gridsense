@@ -11,20 +11,48 @@ export const CITY_COORDS = {
   'university of virginia': [38.03, -78.51],
 };
 
+export const LOW_EMISSIONS_SCORE_THRESHOLD = 70;
+export const MODERATE_EMISSIONS_SCORE_THRESHOLD = 40;
+
+export function cleanPowerScoreFromMoer(moer) {
+  const numericMoer = Number.isFinite(Number(moer)) ? Number(moer) : 0;
+  return Math.max(0, Math.min(100, 100 * (1 - numericMoer / 1000)));
+}
+
+export function getCleanPowerScore(data) {
+  if (!data) return 0;
+  if (typeof data === 'number') return cleanPowerScoreFromMoer(data);
+  if (typeof data.clean_power_score === 'number') return data.clean_power_score;
+  if (typeof data.green_score === 'number') return data.green_score;
+  if (typeof data.moer === 'number') return cleanPowerScoreFromMoer(data.moer);
+  if (typeof data.pct_renewable === 'number') return data.pct_renewable * 100;
+  return 0;
+}
+
 export function getStatusColor(data) {
   if (!data) return '#888780';
-  const pct = data.pct_renewable;
-  if (pct > 0.60) return '#22C55E';
-  if (pct >= 0.30) return '#EAB308';
+  if (typeof data.status === 'string') {
+    if (data.status === 'clean') return '#22C55E';
+    if (data.status === 'moderate') return '#EAB308';
+    if (data.status === 'dirty') return '#EF4444';
+  }
+  const score = getCleanPowerScore(data);
+  if (score >= LOW_EMISSIONS_SCORE_THRESHOLD) return '#22C55E';
+  if (score >= MODERATE_EMISSIONS_SCORE_THRESHOLD) return '#EAB308';
   return '#EF4444';
 }
 
 export function getStatusLabel(data) {
   if (!data) return 'Unknown';
-  const pct = data.pct_renewable;
-  if (pct > 0.60) return 'Clean';
-  if (pct >= 0.30) return 'Moderate';
-  return 'Dirty';
+  if (typeof data.status === 'string') {
+    if (data.status === 'clean') return 'Lower emissions';
+    if (data.status === 'moderate') return 'Moderate emissions';
+    if (data.status === 'dirty') return 'High carbon';
+  }
+  const score = getCleanPowerScore(data);
+  if (score >= LOW_EMISSIONS_SCORE_THRESHOLD) return 'Lower emissions';
+  if (score >= MODERATE_EMISSIONS_SCORE_THRESHOLD) return 'Moderate emissions';
+  return 'High carbon';
 }
 
 export function getMoerColor(moer) {

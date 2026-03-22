@@ -16,8 +16,12 @@ class IntensityResponse(BaseModel):
 
     city: str
     region: str
+    region_label: str
+    latitude: float
+    longitude: float
     moer: float
     pct_renewable: float
+    clean_power_score: float
     green_score: float
     status: str
     temp_c: float
@@ -30,6 +34,7 @@ class ForecastPoint(BaseModel):
     time: str
     moer: float
     pct_renewable: float
+    clean_power_score: float
     temp_c: float
     demand_index: float
     grid_stress: float
@@ -75,6 +80,7 @@ class SimulationPoint(BaseModel):
     demand_index: float
     moer: float
     pct_renewable: float
+    clean_power_score: float
     grid_stress: float
 
 
