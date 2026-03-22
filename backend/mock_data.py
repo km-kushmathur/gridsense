@@ -20,12 +20,49 @@ MOCK_CITY_COORDS: dict[str, tuple[float, float]] = {
 }
 
 MOCK_REGION = "CAISO_NORTH"
-_MOER_PATTERN: list[float] = [
-    860.0, 830.0, 790.0, 740.0, 680.0, 610.0,
-    550.0, 500.0, 470.0, 520.0, 590.0, 660.0,
-    730.0, 790.0, 840.0, 890.0, 910.0, 870.0,
-    820.0, 740.0, 660.0, 590.0, 520.0, 470.0,
-]
+_MOER_PROFILES: dict[str, list[float]] = {
+    "west_coast": [
+        640.0, 620.0, 590.0, 550.0, 500.0, 450.0,
+        390.0, 340.0, 300.0, 270.0, 250.0, 260.0,
+        320.0, 390.0, 480.0, 590.0, 690.0, 760.0,
+        720.0, 690.0, 670.0, 650.0, 620.0, 590.0,
+    ],
+    "southwest": [
+        760.0, 730.0, 700.0, 660.0, 610.0, 560.0,
+        480.0, 400.0, 320.0, 270.0, 240.0, 220.0,
+        240.0, 320.0, 430.0, 570.0, 710.0, 820.0,
+        790.0, 750.0, 720.0, 700.0, 680.0, 650.0,
+    ],
+    "midwest": [
+        820.0, 800.0, 780.0, 750.0, 710.0, 660.0,
+        620.0, 590.0, 560.0, 530.0, 510.0, 500.0,
+        520.0, 560.0, 610.0, 680.0, 760.0, 820.0,
+        840.0, 830.0, 810.0, 790.0, 770.0, 750.0,
+    ],
+    "northeast": [
+        720.0, 700.0, 680.0, 650.0, 620.0, 580.0,
+        540.0, 520.0, 500.0, 470.0, 450.0, 440.0,
+        460.0, 500.0, 560.0, 640.0, 720.0, 790.0,
+        770.0, 740.0, 720.0, 700.0, 690.0, 680.0,
+    ],
+    "mountain": [
+        700.0, 680.0, 650.0, 620.0, 580.0, 540.0,
+        500.0, 450.0, 410.0, 370.0, 340.0, 330.0,
+        350.0, 390.0, 450.0, 530.0, 620.0, 700.0,
+        680.0, 650.0, 630.0, 610.0, 590.0, 570.0,
+    ],
+}
+_CITY_PROFILE_OVERRIDES: dict[str, str] = {
+    "sacramento": "west_coast",
+    "san francisco": "west_coast",
+    "los angeles": "west_coast",
+    "seattle": "west_coast",
+    "austin": "southwest",
+    "denver": "mountain",
+    "chicago": "midwest",
+    "new york": "northeast",
+    "charlottesville": "northeast",
+}
 _TEMP_PATTERN: list[float] = [
     26.0, 25.5, 25.0, 24.5, 24.0, 24.5,
     26.0, 28.0, 30.0, 32.5, 35.0, 37.5,
@@ -37,6 +74,38 @@ _TEMP_PATTERN: list[float] = [
 def get_mock_coordinates(city: str) -> tuple[float, float]:
     """Return stable coordinates for local testing."""
     return MOCK_CITY_COORDS.get(city.strip().lower(), MOCK_CITY_COORDS["sacramento"])
+
+
+def _normalize_city(city: str) -> str:
+    return city.strip().lower()
+
+
+def _city_checksum(city: str) -> int:
+    normalized = _normalize_city(city)
+    return sum(ord(char) for char in normalized if char.isalnum())
+
+
+def _select_city_profile(city: str, region: str) -> str:
+    normalized = _normalize_city(city)
+    if normalized in _CITY_PROFILE_OVERRIDES:
+        return _CITY_PROFILE_OVERRIDES[normalized]
+
+    profile_names = list(_MOER_PROFILES.keys())
+    if not normalized:
+        return "west_coast" if region == MOCK_REGION else profile_names[0]
+    return profile_names[_city_checksum(normalized) % len(profile_names)]
+
+
+def _build_city_moer_pattern(city: str, region: str) -> list[float]:
+    base_pattern = _MOER_PROFILES[_select_city_profile(city, region)]
+    checksum = _city_checksum(city)
+    shift = checksum % 4
+    scale = 0.94 + (checksum % 7) * 0.02
+    if shift:
+        rotated = base_pattern[shift:] + base_pattern[:shift]
+    else:
+        rotated = list(base_pattern)
+    return [round(value * scale, 1) for value in rotated]
 
 
 def _green_score(moer: float) -> float:
@@ -56,7 +125,7 @@ def _condition(temp_c: float) -> str:
 def get_mock_realtime(region: str) -> dict[str, float]:
     """Return a deterministic current grid snapshot."""
     hour = datetime.now(timezone.utc).hour
-    moer = _MOER_PATTERN[hour % len(_MOER_PATTERN)]
+    moer = _MOER_PROFILES["west_coast"][hour % 24]
     green_score = _green_score(moer)
     return {
         "moer": moer,
@@ -66,13 +135,15 @@ def get_mock_realtime(region: str) -> dict[str, float]:
     }
 
 
-def get_mock_forecast(region: str) -> list[dict[str, float | str]]:
-    """Return a 24-hour mock MOER forecast."""
+def get_mock_forecast(region: str, city: str = "") -> list[dict[str, float | str]]:
+    """Return a deterministic 24-hour mock MOER forecast."""
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    pattern = _build_city_moer_pattern(city, region)
+    start_index = now.hour % len(pattern)
     forecast: list[dict[str, float | str]] = []
     for hour_offset in range(24):
         point_time = now + timedelta(hours=hour_offset)
-        moer = _MOER_PATTERN[(point_time.hour + hour_offset) % len(_MOER_PATTERN)]
+        moer = pattern[(start_index + hour_offset) % len(pattern)]
         green_score = _green_score(moer)
         forecast.append({
             "time": point_time.isoformat(),
@@ -127,10 +198,11 @@ def get_mock_weather_response(city: str) -> dict[str, float | str | bool | list[
 
 def get_mock_intensity(city: str) -> dict[str, float | str | bool]:
     """Return the intensity payload with weather context."""
-    realtime = get_mock_realtime(MOCK_REGION)
+    current_forecast = get_mock_forecast(MOCK_REGION, city)
+    current_moer = float(current_forecast[0]["moer"])
+    green_score = float(_green_score(current_moer))
     weather = get_mock_weather_response(city)
     current_simulation = build_mock_simulation(city, "normal")["timeline"][0]
-    green_score = float(realtime["green_score"])
     lat, lng = get_mock_coordinates(city)
     status = emissions_band_from_score(green_score)
     return {
@@ -139,8 +211,8 @@ def get_mock_intensity(city: str) -> dict[str, float | str | bool]:
         "region_label": region_label_for(MOCK_REGION),
         "latitude": lat,
         "longitude": lng,
-        "moer": float(realtime["moer"]),
-        "pct_renewable": float(realtime["pct_renewable"]),
+        "moer": current_moer,
+        "pct_renewable": round(green_score / 100, 2),
         "clean_power_score": green_score,
         "green_score": green_score,
         "status": status,
@@ -152,7 +224,7 @@ def get_mock_intensity(city: str) -> dict[str, float | str | bool]:
 
 def build_mock_simulation(city: str, scenario: str) -> dict[str, object]:
     """Return a deterministic simulation response."""
-    forecast = get_mock_forecast(MOCK_REGION)
+    forecast = get_mock_forecast(MOCK_REGION, city)
     weather = get_mock_weather_forecast(city)
     multiplier = 1.4 if scenario == "heat_wave" else 1.3 if scenario == "cold_snap" else 1.0
     timeline: list[dict[str, float | int | str]] = []

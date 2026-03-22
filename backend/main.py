@@ -108,6 +108,11 @@ def _cache_get(key: str) -> object | None:
     return None
 
 
+def _cache_get_any(key: str) -> object | None:
+    cached = CACHE.get(key)
+    return cached[1] if cached else None
+
+
 def _cache_set(key: str, value: object) -> None:
     CACHE[key] = (time.time(), value)
 
@@ -137,8 +142,9 @@ def _find_best_window(forecast: list[dict], window_size: int = 2) -> str:
 
 
 async def _build_forecast_timeline(city: str, lat: float, lng: float, region: str) -> list[dict]:
-    """Build the shared 24-hour forecast timeline used across the dashboard."""
-    simulation = await simulator.simulate(city, "normal", lat, lng, region)
+    """Build the shared 24-hour demo forecast timeline used across the dashboard."""
+    del lat, lng, region
+    simulation = build_mock_simulation(city, "normal")
     return list(simulation["timeline"])
 
 
@@ -222,12 +228,18 @@ async def _fetch_forecast_payload(city: str, use_cache: bool = True) -> list[dic
         if cached:
             return cached
 
+    stale_cached = _cache_get_any(cache_key)
+
     try:
         lat, lng, region = await _resolve_city(city)
         forecast = await _build_forecast_timeline(city, lat, lng, region)
     except ValueError:
+        if stale_cached:
+            return list(stale_cached)
         forecast = _mock_or_raise(city, "forecast", ValueError(f"Could not geocode city: {city}"))
     except Exception as exc:
+        if stale_cached:
+            return list(stale_cached)
         forecast = _mock_or_raise(city, "forecast", exc)
 
     _cache_set(cache_key, forecast)
