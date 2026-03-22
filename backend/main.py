@@ -141,6 +141,32 @@ def _find_best_window(forecast: list[dict], window_size: int = 2) -> str:
     return str(build_best_window_meta(forecast, window_size=window_size)["best_window_label"])
 
 
+def _current_moer_from_forecast(forecast: list[dict], fallback: float = 500.0) -> float:
+    if not forecast:
+        return fallback
+    try:
+        return float(forecast[0].get("moer", fallback))
+    except (AttributeError, TypeError, ValueError):
+        return fallback
+
+
+def _payload_has_positive_nudge_savings(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    nudges = payload.get("nudges", [])
+    if not isinstance(nudges, list) or not nudges:
+        return False
+    for nudge in nudges:
+        if not isinstance(nudge, dict):
+            continue
+        try:
+            if float(nudge.get("co2_saved_grams", 0.0)) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 async def _build_forecast_timeline(city: str, lat: float, lng: float, region: str) -> list[dict]:
     """Build the shared 24-hour demo forecast timeline used across the dashboard."""
     del lat, lng, region
@@ -337,7 +363,7 @@ async def get_nudges(body: NudgeRequest) -> NudgeResponse:
     """Generate smart appliance nudges for a city based on forecast data."""
     cache_key = f"{body.city.lower()}:nudges"
     cached = _cache_get(cache_key)
-    if cached:
+    if cached and _payload_has_positive_nudge_savings(cached):
         return NudgeResponse(**cached)
 
     try:
@@ -346,31 +372,39 @@ async def get_nudges(body: NudgeRequest) -> NudgeResponse:
         weather_now = await weather.get_current(lat, lng, body.city)
         weather_now["heat_wave"] = await weather.is_heat_wave(lat, lng, body.city)
         forecast = await _build_forecast_timeline(body.city, lat, lng, region)
+        current_moer = _current_moer_from_forecast(
+            forecast,
+            fallback=float(realtime.get("moer", 500.0)),
+        )
         payload = {
             "nudges": await nudge_engine.generate_nudges(
                 forecast=forecast,
                 city=body.city,
                 current_weather=weather_now,
-                current_moer=float(realtime.get("moer", 500.0)),
+                current_moer=current_moer,
             )
         }
     except ValueError:
         payload = {"nudges": []}
     except Exception:
+        fallback_forecast = [
+            {
+                "time": row["time"],
+                "moer": row["moer"],
+                "pct_renewable": row["pct_renewable"],
+                "clean_power_score": row["clean_power_score"],
+            }
+            for row in build_mock_simulation(body.city, "normal")["timeline"]
+        ]
         payload = {
             "nudges": await nudge_engine.generate_nudges(
-                forecast=[
-                    {
-                        "time": row["time"],
-                        "moer": row["moer"],
-                        "pct_renewable": row["pct_renewable"],
-                        "clean_power_score": row["clean_power_score"],
-                    }
-                    for row in build_mock_simulation(body.city, "normal")["timeline"]
-                ],
+                forecast=fallback_forecast,
                 city=body.city,
                 current_weather=get_mock_weather_response(body.city),
-                current_moer=float(get_mock_intensity(body.city)["moer"]),
+                current_moer=_current_moer_from_forecast(
+                    fallback_forecast,
+                    fallback=float(get_mock_intensity(body.city)["moer"]),
+                ),
             )
         }
 

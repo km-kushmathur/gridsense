@@ -59,6 +59,54 @@ class ForecastCacheFallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, cached_forecast)
 
 
+class NudgeSavingsTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        main.CACHE.clear()
+
+    async def asyncTearDown(self) -> None:
+        main.CACHE.clear()
+
+    async def test_zero_savings_cached_payload_is_not_reused(self) -> None:
+        main.CACHE["austin:nudges"] = (
+            9999999999.0,
+            {
+                "nudges": [
+                    {
+                        "appliance": "ev_charger",
+                        "emoji": "⚡",
+                        "best_time": "2026-03-22T10:00:00+00:00",
+                        "best_window_start": "2026-03-22T10:00:00+00:00",
+                        "best_window_end": "2026-03-22T12:00:00+00:00",
+                        "best_window_label": "10 am - 12 pm",
+                        "co2_saved_grams": 0.0,
+                        "window_avg_moer": 200.0,
+                        "message": "cached zero",
+                    }
+                ]
+            },
+        )
+
+        with patch.object(main.nudge_engine, "is_configured", return_value=False):
+            with patch("backend.main._resolve_city", new=AsyncMock(return_value=(30.0, -97.0, "CAISO_NORTH"))):
+                with patch("backend.main.watttime.get_realtime", new=AsyncMock(return_value={"moer": 100.0})):
+                    with patch("backend.main.weather.get_current", new=AsyncMock(return_value={"temp_c": 28.0, "condition": "Clear"})):
+                        with patch("backend.main.weather.is_heat_wave", new=AsyncMock(return_value=False)):
+                            result = await main.get_nudges(main.NudgeRequest(city="Austin"))
+
+        self.assertTrue(any(nudge.co2_saved_grams > 0 for nudge in result.nudges))
+
+    async def test_nudges_use_forecast_current_moer_for_savings(self) -> None:
+        with patch.object(main.nudge_engine, "is_configured", return_value=False):
+            with patch("backend.main._resolve_city", new=AsyncMock(return_value=(30.0, -97.0, "CAISO_NORTH"))):
+                with patch("backend.main.watttime.get_realtime", new=AsyncMock(return_value={"moer": 50.0})):
+                    with patch("backend.main.weather.get_current", new=AsyncMock(return_value={"temp_c": 28.0, "condition": "Clear"})):
+                        with patch("backend.main.weather.is_heat_wave", new=AsyncMock(return_value=False)):
+                            result = await main.get_nudges(main.NudgeRequest(city="Austin"))
+
+        self.assertTrue(result.nudges)
+        self.assertTrue(all(nudge.co2_saved_grams > 0 for nudge in result.nudges))
+
+
 class HardcodedForecastTests(unittest.TestCase):
     def test_forecasts_vary_by_city(self) -> None:
         west = get_mock_forecast(MOCK_REGION, "San Francisco")

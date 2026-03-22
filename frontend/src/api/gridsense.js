@@ -20,6 +20,15 @@ async function parseResponse(res, fallbackMessage) {
   throw new Error(detail || `${fallbackMessage}: ${res.status}`);
 }
 
+function hasPositiveNudgeSavings(payload) {
+  const nudges = payload?.nudges;
+  if (!Array.isArray(nudges) || nudges.length === 0) {
+    return false;
+  }
+
+  return nudges.some((nudge) => Number(nudge?.co2_saved_grams || 0) > 0);
+}
+
 export async function fetchIntensity(city) {
   const res = await fetch(`${API_BASE}/intensity?city=${encodeURIComponent(city)}`);
   return parseResponse(res, 'Failed to fetch intensity');
@@ -44,7 +53,7 @@ export async function fetchWeather(city) {
 export async function fetchNudges(city) {
   if (!gridCache.isStale(city, 'nudges', NUDGES_TTL)) {
     const cached = gridCache.getData(city, 'nudges');
-    if (cached) return cached;
+    if (cached && hasPositiveNudgeSavings(cached)) return cached;
   }
   const res = await fetch(`${API_BASE}/nudges`, {
     method: 'POST',
@@ -52,7 +61,9 @@ export async function fetchNudges(city) {
     body: JSON.stringify({ city }),
   });
   const data = await parseResponse(res, 'Failed to fetch nudges');
-  gridCache.set(city, 'nudges', data);
+  if (hasPositiveNudgeSavings(data)) {
+    gridCache.set(city, 'nudges', data);
+  }
   return data;
 }
 
