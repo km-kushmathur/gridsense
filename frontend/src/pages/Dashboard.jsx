@@ -204,7 +204,7 @@ export default function Dashboard() {
                   <div className="rounded-[24px] border border-slate-200 bg-white px-4">
                     <ConditionRow
                       label="Carbon Rate (lbs CO₂/MWh)"
-                      value={`${Math.round(gridData?.moer || 0)} lbs/MWh`}
+                      value={`${Math.round(gridData?.moer || 0)} lbs CO₂/MWh`}
                       valueStyle={{ color: getMoerColor(gridData?.moer || 0) }}
                     />
                     <ConditionRow
@@ -223,7 +223,7 @@ export default function Dashboard() {
                   <DetailDisclosure
                     badge="Condition method"
                     title="Observed weather vs derived operating pressure"
-                    summary="Open for the heat-wave rule, the meaning of grid stress, and what this panel should be used for."
+                    summary="Open for the heat-wave rule, the meaning of Grid Load Pressure, and what this panel should be used for."
                   >
                     <p>
                       <span className="font-semibold text-gray-900">Observed values:</span> air temperature and weather summary come from Open-Meteo.

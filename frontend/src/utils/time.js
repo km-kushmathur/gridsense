@@ -1,7 +1,29 @@
-function toDate(value) {
+export const HOUR_MS = 60 * 60 * 1000;
+
+function normalizeTimeValue(value) {
+  if (value instanceof Date || typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+
+  const isoLike = trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T');
+  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(isoLike)) {
+    return isoLike;
+  }
+  return `${isoLike}Z`;
+}
+
+export function toDate(value) {
   if (!value) return null;
-  const parsed = value instanceof Date ? value : new Date(value);
+  const parsed = value instanceof Date ? value : new Date(normalizeTimeValue(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function toTimestampMs(value) {
+  const parsed = toDate(value);
+  return parsed ? parsed.getTime() : Number.NaN;
 }
 
 export function formatHourLabel(hour) {
@@ -30,6 +52,6 @@ export function formatWindowFromPointRange(points, fallback = 'Unavailable') {
   const endPoint = toDate(points[points.length - 1]?.time);
   if (!start || !endPoint) return fallback;
 
-  const end = new Date(endPoint.getTime() + 60 * 60 * 1000);
+  const end = new Date(endPoint.getTime() + HOUR_MS);
   return formatWindowRange(start, end, fallback);
 }

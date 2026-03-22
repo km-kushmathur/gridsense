@@ -5,7 +5,7 @@ import contextlib
 import os
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -39,6 +39,7 @@ try:
     from .settings import azure_openai_configured, use_mock_data
     from .watttime_client import WattTimeClient
     from .weather_client import WeatherClient
+    from .window_utils import build_best_window_meta
 except ImportError:
     from alert_service import AlertService
     from demand_simulator import DemandSimulator
@@ -67,6 +68,7 @@ except ImportError:
     from settings import azure_openai_configured, use_mock_data
     from watttime_client import WattTimeClient
     from weather_client import WeatherClient
+    from window_utils import build_best_window_meta
 
 load_dotenv()
 
@@ -130,48 +132,14 @@ def _validate_topic(topic: str) -> str:
     return normalized
 
 
-def _parse_time(value: str) -> datetime | None:
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
-def _format_hour_label(hour: int) -> str:
-    if hour == 0:
-        return "12 am"
-    if hour < 12:
-        return f"{hour} am"
-    if hour == 12:
-        return "12 pm"
-    return f"{hour - 12} pm"
-
-
 def _find_best_window(forecast: list[dict], window_size: int = 2) -> str:
-    hourly = forecast[:24]
-    if not hourly:
-        return "Unavailable"
-    if len(hourly) <= window_size:
-        start = _parse_time(str(hourly[0].get("time", "")))
-        end = _parse_time(str(hourly[-1].get("time", "")))
-        if not start or not end:
-            return "Unavailable"
-        return f"{_format_hour_label(start.hour)} - {_format_hour_label((end + timedelta(hours=1)).hour)}"
+    return str(build_best_window_meta(forecast, window_size=window_size)["best_window_label"])
 
-    best_points = hourly[:window_size]
-    lowest_average = float("inf")
-    for index in range(len(hourly) - window_size + 1):
-        points = hourly[index:index + window_size]
-        average = sum(float(point.get("moer", 0.0)) for point in points) / len(points)
-        if average < lowest_average:
-            lowest_average = average
-            best_points = points
 
-    start = _parse_time(str(best_points[0].get("time", "")))
-    end = _parse_time(str(best_points[-1].get("time", "")))
-    if not start or not end:
-        return "Unavailable"
-    return f"{_format_hour_label(start.hour)} - {_format_hour_label((end + timedelta(hours=1)).hour)}"
+async def _build_forecast_timeline(city: str, lat: float, lng: float, region: str) -> list[dict]:
+    """Build the shared 24-hour forecast timeline used across the dashboard."""
+    simulation = await simulator.simulate(city, "normal", lat, lng, region)
+    return list(simulation["timeline"])
 
 
 def _mock_or_raise(city: str, endpoint: str, exc: Exception) -> object:
@@ -256,8 +224,7 @@ async def _fetch_forecast_payload(city: str, use_cache: bool = True) -> list[dic
 
     try:
         lat, lng, region = await _resolve_city(city)
-        simulation = await simulator.simulate(city, "normal", lat, lng, region)
-        forecast = simulation["timeline"]
+        forecast = await _build_forecast_timeline(city, lat, lng, region)
     except ValueError:
         forecast = _mock_or_raise(city, "forecast", ValueError(f"Could not geocode city: {city}"))
     except Exception as exc:
@@ -366,7 +333,7 @@ async def get_nudges(body: NudgeRequest) -> NudgeResponse:
         realtime = await watttime.get_realtime(region)
         weather_now = await weather.get_current(lat, lng, body.city)
         weather_now["heat_wave"] = await weather.is_heat_wave(lat, lng, body.city)
-        forecast = await watttime.get_forecast(region)
+        forecast = await _build_forecast_timeline(body.city, lat, lng, region)
         payload = {
             "nudges": await nudge_engine.generate_nudges(
                 forecast=forecast,

@@ -1,5 +1,50 @@
+import { HOUR_MS, toTimestampMs } from './time';
+
+export function sortForecastPoints(forecast, limit = 24) {
+  if (!Array.isArray(forecast)) {
+    return [];
+  }
+
+  return [...forecast]
+    .filter(Boolean)
+    .sort((left, right) => {
+      const leftTime = toTimestampMs(left?.time);
+      const rightTime = toTimestampMs(right?.time);
+      if (!Number.isFinite(leftTime) && !Number.isFinite(rightTime)) return 0;
+      if (!Number.isFinite(leftTime)) return 1;
+      if (!Number.isFinite(rightTime)) return -1;
+      return leftTime - rightTime;
+    })
+    .slice(0, limit);
+}
+
+export function getCurrentForecastIndex(forecast, nowMs = Date.now()) {
+  const hourly = sortForecastPoints(forecast, forecast?.length || 24);
+  if (!hourly.length) {
+    return 0;
+  }
+
+  const timestamps = hourly.map((point) => toTimestampMs(point?.time));
+  for (let index = 0; index < timestamps.length; index += 1) {
+    const start = timestamps[index];
+    if (!Number.isFinite(start)) continue;
+
+    const nextStart = timestamps[index + 1];
+    const end = Number.isFinite(nextStart) ? nextStart : start + HOUR_MS;
+    if (start <= nowMs && nowMs < end) {
+      return index;
+    }
+  }
+
+  const first = timestamps.find((value) => Number.isFinite(value));
+  if (!Number.isFinite(first)) {
+    return 0;
+  }
+  return nowMs < first ? 0 : Math.max(0, timestamps.length - 1);
+}
+
 export function getBestWindowMeta(forecast, windowSize = 2, limit = 24) {
-  const hourly = Array.isArray(forecast) ? forecast.slice(0, limit) : [];
+  const hourly = sortForecastPoints(forecast, limit);
   if (!hourly.length) {
     return {
       averageMoer: 0,

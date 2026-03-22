@@ -72,7 +72,7 @@ export function CityMap({ data, cityName, loading }) {
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Observed MOER now</p>
-          <p className="mt-2 text-3xl font-semibold" style={{ color: moerColor }}>
+          <p className="mt-2 font-display text-3xl font-semibold" style={{ color: moerColor }}>
             {Math.round(data.moer || 0)}
           </p>
           <p className="text-xs text-slate-500">lbs CO&#x2082;/MWh</p>

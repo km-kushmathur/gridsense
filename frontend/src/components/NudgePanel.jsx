@@ -60,6 +60,17 @@ function formatBestWindow(nudge) {
   return 'Window unavailable';
 }
 
+function formatSavedCo2(grams) {
+  const value = Number(grams || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0';
+  }
+  if (value < 10) {
+    return value.toFixed(1).replace(/\.0$/, '');
+  }
+  return String(Math.round(value));
+}
+
 export function NudgePanel({ city }) {
   const [nudges, setNudges] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -98,7 +109,7 @@ export function NudgePanel({ city }) {
           <div className="flex flex-wrap gap-2">
             <span className="taxonomy-chip taxonomy-chip-generated">Generated recommendation</span>
           </div>
-          <p className="panel-title">What to Do Now</p>
+          <p className="panel-title font-display">What to Do Now</p>
           <p className="panel-subtitle">
             The cleanest upcoming window for EV charging, laundry, and other high-draw appliances. Savings estimates assume you'd otherwise run them right now.
           </p>
@@ -188,7 +199,7 @@ export function NudgePanel({ city }) {
                     <div className="flex items-center gap-6">
                       <span className="min-w-[72px] text-right text-sm text-slate-500">{kwh} kWh</span>
                       <span className="min-w-[80px] text-right text-base font-semibold text-green-700">
-                        -{Math.round(nudge.co2_saved_grams || 0)}g CO&#x2082;
+                        -{formatSavedCo2(nudge.co2_saved_grams)}g CO&#x2082;
                       </span>
                       <span className="min-w-[64px] text-right text-sm font-medium text-slate-600">
                         ${costPerCycle}
@@ -203,7 +214,7 @@ export function NudgePanel({ city }) {
                 <div className="flex items-center gap-6">
                   <span className="min-w-[72px] text-right text-sm text-slate-500">{totalKwh.toFixed(1)} kWh</span>
                   <span className="min-w-[80px] text-right text-base font-bold text-green-700">
-                    -{Math.round(totalCo2Saved)}g CO&#x2082;
+                    -{formatSavedCo2(totalCo2Saved)}g CO&#x2082;
                   </span>
                   <span className="min-w-[64px] text-right text-sm font-semibold text-slate-700">
                     ${(totalKwh * AVG_ELECTRICITY_COST_PER_KWH).toFixed(2)}

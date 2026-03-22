@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { getCleanPowerScore, getMoerColor } from '../constants';
-import { getBestWindowMeta } from '../utils/forecast';
+import { getBestWindowMeta, getCurrentForecastIndex, sortForecastPoints } from '../utils/forecast';
 import { formatHourFromValue, formatWindowFromPointRange } from '../utils/time';
 import { SkeletonCard } from './SkeletonCard';
 import { DetailDisclosure } from './ui/DetailDisclosure';
@@ -32,18 +32,17 @@ export function ForecastChart({ forecast, loading, statusColor = '#22C55E' }) {
   if (!forecast?.length) {
     return (
       <div className="card-glass p-6">
-        <p className="panel-title">Carbon Rate Forecast</p>
+        <p className="panel-title font-display">Carbon Rate Forecast</p>
         <p className="panel-subtitle">Unable to load forecast data — check your connection and try refreshing.</p>
       </div>
     );
   }
 
   const { hourly, maxMoer, currentIndex, bestWindow, bestPairStart } = useMemo(() => {
-    const h = forecast.slice(0, 24);
+    const h = sortForecastPoints(forecast, 24);
     const max = Math.max(...h.map((point) => point.moer || 0), 1);
-    const hour = new Date().getHours();
-    const idx = Math.max(0, h.findIndex((point) => new Date(point.time).getHours() === hour));
-    const { points, startIndex } = getBestWindowMeta(h);
+    const idx = getCurrentForecastIndex(h);
+    const { points, startIndex } = getBestWindowMeta(h, 2, h.length);
     return { hourly: h, maxMoer: max, currentIndex: idx, bestWindow: points, bestPairStart: startIndex };
   }, [forecast]);
 
@@ -99,7 +98,7 @@ export function ForecastChart({ forecast, loading, statusColor = '#22C55E' }) {
                 const isBestWindow = index === bestPairStart || index === bestPairStart + 1;
                 const cleanScore = Math.round(getCleanPowerScore(point));
                 const statusWord = moer < 400 ? 'clean' : moer < 700 ? 'moderate' : 'high carbon';
-                const barLabel = `${formatHourFromValue(point.time)}: ${Math.round(moer)} lbs CO\u2082 per MWh, ${statusWord}`;
+                const barLabel = `${formatHourFromValue(point.time)}: ${Math.round(moer)} lbs CO₂/MWh, ${statusWord}`;
 
                 return (
                   <div key={point.time || index} className="group relative flex min-w-[32px] flex-1 items-end justify-center" role="img" aria-label={barLabel}>

@@ -21,7 +21,7 @@ const SCENARIOS = [
     key: 'cold_snap',
     label: 'Cold snap',
     tone: '#f59e0b',
-    description: 'A sudden drop in temperature drives heating demand into a concentrated morning peak, raising both grid stress and carbon intensity.',
+    description: 'A sudden drop in temperature drives heating demand into a concentrated morning peak, raising both Grid Load Pressure and carbon intensity.',
   },
   {
     key: 'normal',
@@ -207,7 +207,7 @@ export default function Simulator() {
           <section className="card-solid p-5 sm:p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="panel-title">Playback controls</p>
+                <p className="panel-title font-display">Playback controls</p>
                 <p className="panel-subtitle">
                   Move hour by hour through the simulated day. Watch when the unmanaged grid crosses into danger and compare that with the optimized path.
                 </p>
@@ -298,7 +298,7 @@ export default function Simulator() {
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current stress</p>
                       <p
-                        className="mt-2 text-4xl font-semibold"
+                        className="mt-2 font-display text-4xl font-semibold"
                         style={{ color: getStressColor(current?.grid_stress || 0) }}
                       >
                         {Math.round(current?.grid_stress || 0)}%
@@ -358,7 +358,7 @@ export default function Simulator() {
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Current stress</p>
                       <p
-                        className="mt-2 text-4xl font-semibold"
+                        className="mt-2 font-display text-4xl font-semibold"
                         style={{ color: getStressColor(shifted?.grid_stress || 0) }}
                       >
                         {Math.round(shifted?.grid_stress || 0)}%

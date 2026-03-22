@@ -15,6 +15,7 @@ try:
         azure_openai_deployment,
         use_mock_data,
     )
+    from .window_utils import build_best_window_meta, format_window_label, parse_iso_timestamp
 except ImportError:
     from grid_utils import clean_power_score_from_moer
     from models import NudgeItem
@@ -25,6 +26,7 @@ except ImportError:
         azure_openai_deployment,
         use_mock_data,
     )
+    from window_utils import build_best_window_meta, format_window_label, parse_iso_timestamp
 
 # kWh per typical cycle for each appliance
 APPLIANCE_KWH: dict[str, float] = {
@@ -61,10 +63,7 @@ class NudgeEngine:
 
     def _parse_timestamp(self, value: str) -> datetime | None:
         """Parse a forecast timestamp into a datetime."""
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            return None
+        return parse_iso_timestamp(value)
 
     def _format_hour_label(self, hour: int) -> str:
         """Render an hour as a readable 12-hour label."""
@@ -78,15 +77,12 @@ class NudgeEngine:
 
     def _build_window_label(self, start_at: str, end_at: str) -> str:
         """Build a display label for a recommendation window."""
-        start = self._parse_timestamp(start_at)
-        end = self._parse_timestamp(end_at)
-        if not start or not end:
-            return "Cleaner window"
-        return f"{self._format_hour_label(start.hour)} - {self._format_hour_label(end.hour)}"
+        return format_window_label(start_at, end_at, fallback="Cleaner window")
 
     def _build_window(self, points: list[dict], start_index: int) -> dict:
         """Summarize a contiguous set of hourly forecast points."""
-        start_at = str(points[0].get("time", ""))
+        start_dt = self._parse_timestamp(str(points[0].get("time", "")))
+        start_at = start_dt.isoformat() if start_dt else str(points[0].get("time", ""))
         end_dt = self._parse_timestamp(str(points[-1].get("time", "")))
         end_at = (end_dt + timedelta(hours=1)).isoformat() if end_dt else start_at
         moer_values = [float(point.get("moer", 0.0)) for point in points]
@@ -106,39 +102,12 @@ class NudgeEngine:
         }
 
     def _find_cleanest_windows(self, forecast: list[dict], n: int = 3) -> list[dict]:
-        """Find the cleanest non-overlapping two-hour windows."""
-        if len(forecast) < WINDOW_HOURS:
-            if not forecast:
-                return []
-            return [self._build_window(forecast[:1], start_index=0)]
-
-        candidates = [
-            self._build_window(forecast[index:index + WINDOW_HOURS], start_index=index)
-            for index in range(len(forecast) - WINDOW_HOURS + 1)
-        ]
-        sorted_candidates = sorted(candidates, key=lambda window: (float(window["avg_moer"]), int(window["start_index"])))
-
-        selected: list[dict] = []
-        occupied_indexes: set[int] = set()
-        for window in sorted_candidates:
-            start_index = int(window["start_index"])
-            candidate_indexes = set(range(start_index, start_index + WINDOW_HOURS))
-            if occupied_indexes & candidate_indexes:
-                continue
-            selected.append(window)
-            occupied_indexes.update(candidate_indexes)
-            if len(selected) == n:
-                break
-
-        if len(selected) < n:
-            for window in sorted_candidates:
-                if window in selected:
-                    continue
-                selected.append(window)
-                if len(selected) == n:
-                    break
-
-        return selected
+        """Find the cleanest two-hour window using the shared forecast helper."""
+        meta = build_best_window_meta(forecast, window_size=WINDOW_HOURS)
+        points = meta["points"]
+        if not points:
+            return []
+        return [self._build_window(points, start_index=int(meta["start_index"]))]
 
     def _calculate_co2_saved(
         self, appliance: str, current_moer: float, best_moer: float

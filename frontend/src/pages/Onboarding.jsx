@@ -17,7 +17,7 @@ const EXAMPLE_CITIES = [
 const VALUE_POINTS = [
   {
     title: 'Live carbon data',
-    body: 'See how clean or dirty your local electricity is right now with one glance.',
+    body: 'See the carbon intensity of your local grid right now — how much CO₂ each unit of electricity is producing at this moment.',
   },
   {
     title: '24-hour forecast',
@@ -25,7 +25,7 @@ const VALUE_POINTS = [
   },
   {
     title: 'Smart nudges',
-    body: 'Get appliance-by-appliance suggestions that explain what to run and when.',
+    body: 'Get a single optimal window to run your high-draw appliances, with estimated carbon savings for each one.',
   },
 ];
 
@@ -38,7 +38,7 @@ const HOW_IT_WORKS = [
   {
     step: '02',
     title: 'Read the grid in plain English',
-    body: 'We translate carbon intensity, weather, and forecast trends into a simple current status.',
+    body: 'The dashboard translates MOER — the marginal carbon intensity of your grid — into a plain-language status and a 0–100 Clean Power Score.',
   },
   {
     step: '03',
@@ -171,7 +171,7 @@ export default function Onboarding() {
               <div className="card-glass p-6">
                 <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Save energy without changing your routine</p>
                 <p className="mt-3 text-base leading-7 text-slate-600">
-                  You already charge your EV and run laundry — GridSense just tells you the best hour to do it. Less carbon, same effort.
+                  You already charge your EV and run laundry. GridSense identifies the single lowest-carbon window in the next 24 hours and shows you how much CO₂ you avoid by timing it right.
                 </p>
               </div>
             </AnimatedContent>

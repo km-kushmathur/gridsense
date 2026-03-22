@@ -175,13 +175,13 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
                 <span className="font-semibold text-gray-900">Limitation:</span> this is a local normalization layer. WattTime does not provide it directly.
               </p>
               <p>
-                <span className="font-semibold text-gray-900">Ceiling justification:</span> the formula uses 1,000 lbs CO&#x2082;/MWh as the normalization ceiling. This value exceeds the marginal emissions rate of the dirtiest U.S. coal plants (typically 900–1,000 lbs CO&#x2082;/MWh), ensuring the score stays above zero under real-world conditions while keeping the scale intuitive.
+                <span className="font-semibold text-gray-900">Ceiling assumption:</span> the formula uses 1000 lbs CO&#x2082;/MWh as the normalization ceiling. This approximates the upper bound of the U.S. continental grid MOER range under typical operating conditions. MOER values above 1000 lbs CO&#x2082;/MWh are theoretically possible in extreme cases and would score 0 — they cannot be distinguished by this index alone.
               </p>
             </DetailDisclosure>
 
             <DetailDisclosure
               badge="Heuristics"
-              title="Heat-wave flag, best-window ranking, and grid-stress interpretation"
+              title="Heat-wave flag, best-window ranking, and Grid Load Pressure interpretation"
               summary="How the dashboard derives operational cues from observed carbon and weather variables."
             >
               <p>
@@ -191,7 +191,7 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
                 <span className="font-semibold text-gray-900">Best shift window:</span> the forecast layer searches for the minimum two-hour mean MOER window. The current best window is {bestWindow}.
               </p>
               <p>
-                <span className="font-semibold text-gray-900">Grid stress:</span> this is a local heuristic derived from forecast demand and carbon conditions. It is not SCADA load, reserve margin, or a reliability declaration from a system operator.
+                <span className="font-semibold text-gray-900">Grid Load Pressure:</span> a local index derived from forecasted demand and MOER. It is not a SCADA measurement, not a utility reserve margin figure, and not a reliability declaration from any system operator. It should be treated as a directional indicator only.
               </p>
             </DetailDisclosure>
           </>
@@ -216,7 +216,7 @@ export function MethodologyPanel({ gridData, weather, forecast }) {
                 <span className="font-semibold text-gray-900">Derived savings:</span> estimated carbon benefit is computed from appliance load assumptions and the difference between current MOER and the suggested window.
               </p>
               <p>
-                <span className="font-semibold text-gray-900">Generated output:</span> Azure OpenAI converts those values into structured timing recommendations. The model does not generate MOER, coordinates, weather, or grid-stress measurements.
+                <span className="font-semibold text-gray-900">Generated output:</span> Azure OpenAI converts pre-computed values into plain-language recommendations. The model receives the timing window and savings figures as fixed inputs — it does not generate, estimate, or validate any physical measurements. If the model output conflicts with the underlying data, the data takes precedence.
               </p>
             </DetailDisclosure>
 
