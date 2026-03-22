@@ -1,18 +1,30 @@
 """GridSense FastAPI backend — dashboard, weather, nudges, and simulation."""
 
+import asyncio
+import contextlib
 import os
+import re
 import time
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
+    from .alert_service import AlertService
     from .demand_simulator import DemandSimulator
     from .geo_utils import geocode_city
     from .grid_utils import emissions_band_from_score, region_label_for
     from .map_service import fetch_static_map
     from .models import (
+        AlertCountResponse,
+        AlertSubscribeRequest,
+        AlertSubscribeResponse,
+        AlertTestRequest,
+        AlertTestResponse,
+        AlertTriggerRequest,
+        AlertTriggerResponse,
         ForecastPoint,
         HealthResponse,
         IntensityResponse,
@@ -28,11 +40,19 @@ try:
     from .watttime_client import WattTimeClient
     from .weather_client import WeatherClient
 except ImportError:
+    from alert_service import AlertService
     from demand_simulator import DemandSimulator
     from geo_utils import geocode_city
     from grid_utils import emissions_band_from_score, region_label_for
     from map_service import fetch_static_map
     from models import (
+        AlertCountResponse,
+        AlertSubscribeRequest,
+        AlertSubscribeResponse,
+        AlertTestRequest,
+        AlertTestResponse,
+        AlertTriggerRequest,
+        AlertTriggerResponse,
         ForecastPoint,
         HealthResponse,
         IntensityResponse,
@@ -54,9 +74,15 @@ watttime = WattTimeClient()
 weather = WeatherClient()
 simulator = DemandSimulator(weather, watttime)
 nudge_engine = NudgeEngine()
+alert_service = AlertService()
 
 CACHE: dict[str, tuple[float, object]] = {}
 CACHE_TTL = 300  # 5 minutes
+ACTIVE_SUBSCRIPTIONS: dict[str, dict[str, float | str]] = {}
+TOPIC_PATTERN = re.compile(r"^[A-Za-z0-9-]{1,39}$")
+ALERT_THRESHOLD = 70.0
+ALERT_POLL_INTERVAL_SECONDS = 300
+ALERT_COOLDOWN_SECONDS = 1800
 
 app = FastAPI(
     title="GridSense API",
@@ -94,6 +120,60 @@ async def _resolve_city(city: str) -> tuple[float, float, str]:
     return lat, lng, region
 
 
+def _validate_topic(topic: str) -> str:
+    normalized = topic.strip()
+    if not TOPIC_PATTERN.fullmatch(normalized):
+        raise HTTPException(
+            status_code=400,
+            detail="Topic must be alphanumeric or hyphenated and under 40 characters.",
+        )
+    return normalized
+
+
+def _parse_time(value: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _format_hour_label(hour: int) -> str:
+    if hour == 0:
+        return "12 am"
+    if hour < 12:
+        return f"{hour} am"
+    if hour == 12:
+        return "12 pm"
+    return f"{hour - 12} pm"
+
+
+def _find_best_window(forecast: list[dict], window_size: int = 2) -> str:
+    hourly = forecast[:24]
+    if not hourly:
+        return "Unavailable"
+    if len(hourly) <= window_size:
+        start = _parse_time(str(hourly[0].get("time", "")))
+        end = _parse_time(str(hourly[-1].get("time", "")))
+        if not start or not end:
+            return "Unavailable"
+        return f"{_format_hour_label(start.hour)} - {_format_hour_label((end + timedelta(hours=1)).hour)}"
+
+    best_points = hourly[:window_size]
+    lowest_average = float("inf")
+    for index in range(len(hourly) - window_size + 1):
+        points = hourly[index:index + window_size]
+        average = sum(float(point.get("moer", 0.0)) for point in points) / len(points)
+        if average < lowest_average:
+            lowest_average = average
+            best_points = points
+
+    start = _parse_time(str(best_points[0].get("time", "")))
+    end = _parse_time(str(best_points[-1].get("time", "")))
+    if not start or not end:
+        return "Unavailable"
+    return f"{_format_hour_label(start.hour)} - {_format_hour_label((end + timedelta(hours=1)).hour)}"
+
+
 def _mock_or_raise(city: str, endpoint: str, exc: Exception) -> object:
     if use_mock_data():
         if endpoint == "intensity":
@@ -121,6 +201,13 @@ def _build_intensity_result(
     """Merge realtime and weather data into the intensity payload."""
     green_score = float(realtime.get("green_score", 50.0))
     clean_power_score = float(realtime.get("clean_power_score", green_score))
+    temp_c = float(weather_now.get("temp_c", 22.0))
+    grid_stress = simulator.estimate_current_grid_stress(
+        temp_c=temp_c,
+        moer=float(realtime.get("moer", 0.0)),
+        hour=datetime.now(timezone.utc).hour,
+        scenario="normal",
+    )
     return {
         "city": city,
         "region": region,
@@ -132,9 +219,52 @@ def _build_intensity_result(
         "clean_power_score": clean_power_score,
         "green_score": green_score,
         "status": _status_from_green_score(green_score),
-        "temp_c": float(weather_now.get("temp_c", 22.0)),
+        "temp_c": temp_c,
         "heat_wave": heat_wave,
+        "grid_stress": grid_stress,
     }
+
+
+async def _fetch_intensity_payload(city: str, use_cache: bool = True) -> dict:
+    cache_key = f"{city.lower()}:intensity"
+    if use_cache:
+        cached = _cache_get(cache_key)
+        if cached:
+            return cached
+
+    try:
+        lat, lng, region = await _resolve_city(city)
+        realtime = await watttime.get_realtime(region)
+        weather_now = await weather.get_current(lat, lng, city)
+        heat_wave = await weather.is_heat_wave(lat, lng, city)
+        result = _build_intensity_result(city, lat, lng, region, realtime, weather_now, heat_wave)
+    except ValueError:
+        result = _mock_or_raise(city, "intensity", ValueError(f"Could not geocode city: {city}"))
+    except Exception as exc:
+        result = _mock_or_raise(city, "intensity", exc)
+
+    _cache_set(cache_key, result)
+    return result
+
+
+async def _fetch_forecast_payload(city: str, use_cache: bool = True) -> list[dict]:
+    cache_key = f"{city.lower()}:forecast"
+    if use_cache:
+        cached = _cache_get(cache_key)
+        if cached:
+            return cached
+
+    try:
+        lat, lng, region = await _resolve_city(city)
+        simulation = await simulator.simulate(city, "normal", lat, lng, region)
+        forecast = simulation["timeline"]
+    except ValueError:
+        forecast = _mock_or_raise(city, "forecast", ValueError(f"Could not geocode city: {city}"))
+    except Exception as exc:
+        forecast = _mock_or_raise(city, "forecast", exc)
+
+    _cache_set(cache_key, forecast)
+    return forecast
 
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -150,45 +280,77 @@ async def health() -> HealthResponse:
 @app.get("/api/intensity", response_model=IntensityResponse)
 async def get_intensity(city: str = Query(..., description="City name to look up")) -> IntensityResponse:
     """Get real-time carbon intensity and weather for a city."""
-    cache_key = f"{city.lower()}:intensity"
-    cached = _cache_get(cache_key)
-    if cached:
-        return IntensityResponse(**cached)
-
-    try:
-        lat, lng, region = await _resolve_city(city)
-        realtime = await watttime.get_realtime(region)
-        weather_now = await weather.get_current(lat, lng, city)
-        heat_wave = await weather.is_heat_wave(lat, lng, city)
-        result = _build_intensity_result(city, lat, lng, region, realtime, weather_now, heat_wave)
-    except ValueError:
-        result = _mock_or_raise(city, "intensity", ValueError(f"Could not geocode city: {city}"))
-    except Exception as exc:
-        result = _mock_or_raise(city, "intensity", exc)
-
-    _cache_set(cache_key, result)
+    result = await _fetch_intensity_payload(city)
     return IntensityResponse(**result)
 
 
 @app.get("/api/forecast", response_model=list[ForecastPoint])
 async def get_forecast(city: str = Query(..., description="City name to look up")) -> list[ForecastPoint]:
     """Get merged 24-hour carbon, weather, and demand forecast."""
-    cache_key = f"{city.lower()}:forecast"
-    cached = _cache_get(cache_key)
-    if cached:
-        return [ForecastPoint(**point) for point in cached]
-
-    try:
-        lat, lng, region = await _resolve_city(city)
-        simulation = await simulator.simulate(city, "normal", lat, lng, region)
-        forecast = simulation["timeline"]
-    except ValueError:
-        forecast = _mock_or_raise(city, "forecast", ValueError(f"Could not geocode city: {city}"))
-    except Exception as exc:
-        forecast = _mock_or_raise(city, "forecast", exc)
-
-    _cache_set(cache_key, forecast)
+    forecast = await _fetch_forecast_payload(city)
     return [ForecastPoint(**point) for point in forecast]
+
+
+@app.post("/api/alerts/subscribe", response_model=AlertSubscribeResponse)
+async def subscribe_alerts(body: AlertSubscribeRequest) -> AlertSubscribeResponse:
+    """Create an ntfy topic subscription for grid alerts."""
+    topic = _validate_topic(body.topic)
+    await _fetch_intensity_payload(body.city, use_cache=False)
+    sent = await alert_service.send_welcome(topic=topic, city=body.city)
+    if not sent:
+        raise HTTPException(status_code=502, detail="Could not send welcome notification.")
+
+    ACTIVE_SUBSCRIPTIONS[topic] = {
+        "topic": topic,
+        "city": body.city,
+        "threshold": ALERT_THRESHOLD,
+        "last_alerted_stress": 0.0,
+        "last_alert_time": 0.0,
+    }
+    return AlertSubscribeResponse(
+        success=True,
+        topic=topic,
+        ntfy_url=f"https://ntfy.sh/{topic}",
+    )
+
+
+@app.post("/api/alerts/test", response_model=AlertTestResponse)
+async def send_alert_test(body: AlertTestRequest) -> AlertTestResponse:
+    """Send a fixed-value test alert to an ntfy topic."""
+    topic = _validate_topic(body.topic)
+    sent = await alert_service.send_test(topic=topic, city=body.city)
+    return AlertTestResponse(sent=sent)
+
+
+@app.post("/api/alerts/trigger", response_model=AlertTriggerResponse)
+async def trigger_alert(body: AlertTriggerRequest) -> AlertTriggerResponse:
+    """Send a live alert immediately for a subscribed topic."""
+    topic = _validate_topic(body.topic)
+    subscription = ACTIVE_SUBSCRIPTIONS.get(topic)
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription topic not found.")
+
+    city = str(subscription["city"])
+    data = await _fetch_intensity_payload(city, use_cache=False)
+    forecast = await _fetch_forecast_payload(city, use_cache=False)
+    best_window = _find_best_window(forecast)
+    sent = await alert_service.send_alert(
+        topic=topic,
+        city=city,
+        grid_stress=float(data["grid_stress"]),
+        clean_power_score=float(data["clean_power_score"]),
+        best_window=best_window,
+    )
+    if sent:
+        ACTIVE_SUBSCRIPTIONS[topic]["last_alerted_stress"] = float(data["grid_stress"])
+        ACTIVE_SUBSCRIPTIONS[topic]["last_alert_time"] = time.time()
+    return AlertTriggerResponse(sent=sent)
+
+
+@app.get("/api/alerts/count", response_model=AlertCountResponse)
+async def get_alert_count() -> AlertCountResponse:
+    """Return the number of active in-memory alert subscriptions."""
+    return AlertCountResponse(count=len(ACTIVE_SUBSCRIPTIONS))
 
 
 @app.post("/api/nudges", response_model=NudgeResponse)
@@ -307,6 +469,61 @@ async def get_weather(city: str = Query(..., description="City name to look up")
 
     _cache_set(cache_key, payload)
     return WeatherResponse(**payload)
+
+
+async def alert_poller() -> None:
+    """Poll live grid state and send ntfy alerts when thresholds are crossed."""
+    while True:
+        await asyncio.sleep(ALERT_POLL_INTERVAL_SECONDS)
+        for topic, subscription in list(ACTIVE_SUBSCRIPTIONS.items()):
+            try:
+                city = str(subscription["city"])
+                threshold = float(subscription.get("threshold", ALERT_THRESHOLD))
+                last_alerted_stress = float(subscription.get("last_alerted_stress", 0.0))
+                last_alert_time = float(subscription.get("last_alert_time", 0.0))
+
+                data = await _fetch_intensity_payload(city, use_cache=False)
+                stress = float(data["grid_stress"])
+
+                should_send = (
+                    stress >= threshold
+                    and last_alerted_stress < threshold
+                    and (time.time() - last_alert_time) > ALERT_COOLDOWN_SECONDS
+                )
+
+                if should_send:
+                    forecast = await _fetch_forecast_payload(city, use_cache=False)
+                    best_window = _find_best_window(forecast)
+                    sent = await alert_service.send_alert(
+                        topic=topic,
+                        city=city,
+                        grid_stress=stress,
+                        clean_power_score=float(data["clean_power_score"]),
+                        best_window=best_window,
+                    )
+                    if sent:
+                        ACTIVE_SUBSCRIPTIONS[topic]["last_alert_time"] = time.time()
+
+                ACTIVE_SUBSCRIPTIONS[topic]["last_alerted_stress"] = stress
+            except Exception:
+                continue
+
+
+@app.on_event("startup")
+async def startup_alert_poller() -> None:
+    """Start the background alert polling task."""
+    app.state.alert_poller_task = asyncio.create_task(alert_poller())
+
+
+@app.on_event("shutdown")
+async def shutdown_alert_poller() -> None:
+    """Cancel the background alert polling task."""
+    task = getattr(app.state, "alert_poller_task", None)
+    if task is None:
+        return
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
 
 if __name__ == "__main__":

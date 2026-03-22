@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchWeather } from '../api/gridsense';
+import { fetchAlertCount, fetchWeather } from '../api/gridsense';
+import { AlertSubscribe } from '../components/AlertSubscribe';
 import { CityMap } from '../components/CityMap';
 import { ForecastChart } from '../components/ForecastChart';
 import { GridStressGauge } from '../components/GridStressGauge';
@@ -42,6 +43,9 @@ export default function Dashboard() {
 
   const [weather, setWeather] = useState(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [alertCount, setAlertCount] = useState(0);
+  const [showStressBanner, setShowStressBanner] = useState(false);
+  const previousStressRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +78,19 @@ export default function Dashboard() {
     }
   }, []);
 
+  const refreshAlertCount = useCallback(async () => {
+    try {
+      const result = await fetchAlertCount();
+      setAlertCount(Number(result?.count || 0));
+    } catch {
+      setAlertCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshAlertCount();
+  }, [refreshAlertCount]);
+
   function dismissWelcome() {
     setShowWelcome(false);
     try {
@@ -90,7 +107,20 @@ export default function Dashboard() {
   const currentTemperature = weather?.temp_c ?? gridData?.temp_c;
   const currentCondition = weather?.condition || 'Conditions loading';
   const heatWave = weather?.heat_wave ?? gridData?.heat_wave;
-  const currentStress = forecast[0]?.grid_stress ?? gridData?.grid_stress ?? 0;
+  const currentStress = gridData?.grid_stress ?? forecast[0]?.grid_stress ?? 0;
+  const showAlertHint = Boolean(gridData?.status === 'moderate' || gridData?.status === 'dirty');
+
+  useEffect(() => {
+    if (!Number.isFinite(Number(currentStress))) {
+      return;
+    }
+    const stressValue = Number(currentStress);
+    const previousStress = previousStressRef.current;
+    if (stressValue >= 70 && (previousStress === null || previousStress < 70)) {
+      setShowStressBanner(true);
+    }
+    previousStressRef.current = stressValue;
+  }, [currentStress]);
 
   return (
     <div className="min-h-screen">
@@ -143,7 +173,10 @@ export default function Dashboard() {
                   data={gridData}
                   loading={gridLoading}
                   onSimulate={() => navigate(`/city/${encodeURIComponent(city)}/simulate`)}
-                />
+                  alertHint={showAlertHint}
+                >
+                  <AlertSubscribe city={city} onSubscribed={refreshAlertCount} />
+                </IntensityBadge>
               </div>
             </section>
           </AnimatedContent>
@@ -155,6 +188,18 @@ export default function Dashboard() {
               <p className="section-subtitle">
                 Weather is directly observed. Heat-wave pressure and grid stress are local interpretation layers that help prioritize load shifting.
               </p>
+
+              {showStressBanner ? (
+                <div
+                  className="mt-6 rounded-lg border border-[#EAB30840] bg-[#1A0A00] px-4 py-3 text-[12px] text-[#EAB308]"
+                  style={{ borderLeft: '2px solid #EAB308' }}
+                >
+                  <p className="font-semibold">Grid stress rising — {Math.round(currentStress)}%</p>
+                  {alertCount > 0 ? (
+                    <p className="mt-1 text-[11px] text-[#f6d76d]">Subscribed users have been notified.</p>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="card-solid mt-6 p-6">
                 <div className="grid gap-6">

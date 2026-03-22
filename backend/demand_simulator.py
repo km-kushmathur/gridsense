@@ -20,8 +20,31 @@ class DemandSimulator:
     def _scenario_multiplier(self, scenario: str) -> float:
         return 1.4 if scenario == "heat_wave" else 1.3 if scenario == "cold_snap" else 1.0
 
+    def _time_factor(self, hour: int) -> float:
+        if hour in {7, 8, 9}:
+            return 0.2
+        if hour in {18, 19, 20, 21}:
+            return 0.15
+        return 0.0
+
     def _grid_stress(self, demand_index: float, moer: float) -> float:
         return round(min(100.0, (demand_index * moer) / 12.0), 1)
+
+    def demand_index_for_conditions(self, temp_c: float, hour: int, scenario: str = "normal") -> float:
+        """Estimate demand index for a temperature and hour."""
+        multiplier = self._scenario_multiplier(scenario)
+        return (0.5 + abs(temp_c - 22.0) * 0.03 + self._time_factor(hour)) * multiplier
+
+    def estimate_current_grid_stress(
+        self,
+        temp_c: float,
+        moer: float,
+        hour: int,
+        scenario: str = "normal",
+    ) -> float:
+        """Estimate current grid stress using the normal simulator heuristic."""
+        demand_index = self.demand_index_for_conditions(temp_c, hour, scenario)
+        return self._grid_stress(demand_index, moer)
 
     async def simulate(
         self,
@@ -42,7 +65,6 @@ class DemandSimulator:
             raise RuntimeError("Simulation inputs are unavailable.")
 
         limit = min(24, len(weather_forecast), len(moer_forecast))
-        multiplier = self._scenario_multiplier(scenario)
         timeline: list[dict] = []
 
         for index in range(limit):
@@ -53,8 +75,7 @@ class DemandSimulator:
             moer = float(moer_row.get("moer", 0.0))
             pct_renewable = float(moer_row.get("pct_renewable", 0.0))
             clean_power_score = float(moer_row.get("clean_power_score", pct_renewable * 100.0))
-            time_factor = 0.2 if hour in {7, 8, 9} else 0.15 if hour in {18, 19, 20, 21} else 0.0
-            demand_index = (0.5 + abs(temp_c - 22.0) * 0.03 + time_factor) * multiplier
+            demand_index = self.demand_index_for_conditions(temp_c, hour, scenario)
             timeline.append({
                 "hour": index,
                 "time": str(moer_row.get("time", weather_row.get("time", ""))),

@@ -3,7 +3,7 @@ import { CountUp } from './ui/CountUp';
 import { DetailDisclosure } from './ui/DetailDisclosure';
 import { StarBorder } from './ui/StarBorder';
 
-export function IntensityBadge({ data, loading, onSimulate }) {
+export function IntensityBadge({ data, loading, onSimulate, alertHint = false, children = null }) {
   if (loading || !data) {
     return (
       <div className="grid gap-6 lg:grid-cols-[minmax(0,220px)_1fr]">
@@ -106,6 +106,14 @@ export function IntensityBadge({ data, loading, onSimulate }) {
             </StarBorder>
           </div>
         )}
+
+        {alertHint ? (
+          <p className="mt-4 text-xs text-slate-400">
+            Want an alert when this changes? <span className="font-semibold text-slate-200">↓</span>
+          </p>
+        ) : null}
+
+        {children ? <div className="mt-5">{children}</div> : null}
       </div>
     </div>
   );

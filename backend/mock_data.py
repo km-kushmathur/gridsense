@@ -129,6 +129,7 @@ def get_mock_intensity(city: str) -> dict[str, float | str | bool]:
     """Return the intensity payload with weather context."""
     realtime = get_mock_realtime(MOCK_REGION)
     weather = get_mock_weather_response(city)
+    current_simulation = build_mock_simulation(city, "normal")["timeline"][0]
     green_score = float(realtime["green_score"])
     lat, lng = get_mock_coordinates(city)
     status = emissions_band_from_score(green_score)
@@ -145,6 +146,7 @@ def get_mock_intensity(city: str) -> dict[str, float | str | bool]:
         "status": status,
         "temp_c": float(weather["temp_c"]),
         "heat_wave": bool(weather["heat_wave"]),
+        "grid_stress": float(current_simulation["grid_stress"]),
     }
 
 

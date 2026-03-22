@@ -26,6 +26,7 @@ class IntensityResponse(BaseModel):
     status: str
     temp_c: float
     heat_wave: bool
+    grid_stress: float
 
 
 class ForecastPoint(BaseModel):
@@ -72,6 +73,52 @@ class NudgeResponse(BaseModel):
     """Wrapped nudge response payload."""
 
     nudges: list[NudgeItem]
+
+
+class AlertSubscribeRequest(BaseModel):
+    """Request body for creating an ntfy alert subscription."""
+
+    city: str
+    topic: str
+
+
+class AlertSubscribeResponse(BaseModel):
+    """Subscription creation response."""
+
+    success: bool
+    topic: str
+    ntfy_url: str
+
+
+class AlertTestRequest(BaseModel):
+    """Request body for sending a test alert."""
+
+    topic: str
+    city: str
+
+
+class AlertTestResponse(BaseModel):
+    """Result of sending a test alert."""
+
+    sent: bool
+
+
+class AlertTriggerRequest(BaseModel):
+    """Request body for manually firing a live alert."""
+
+    topic: str
+
+
+class AlertTriggerResponse(BaseModel):
+    """Result of sending a manual alert."""
+
+    sent: bool
+
+
+class AlertCountResponse(BaseModel):
+    """Current number of active in-memory subscriptions."""
+
+    count: int
 
 
 class SimulationPoint(BaseModel):

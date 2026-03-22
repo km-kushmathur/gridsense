@@ -48,3 +48,35 @@ export async function fetchSimulation(city, scenario) {
   });
   return parseResponse(res, 'Failed to fetch simulation');
 }
+
+export async function subscribeAlerts(city, topic) {
+  const res = await fetch(`${API_BASE}/alerts/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ city, topic }),
+  });
+  return parseResponse(res, 'Failed to subscribe to alerts');
+}
+
+export async function sendAlertTest(city, topic) {
+  const res = await fetch(`${API_BASE}/alerts/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ city, topic }),
+  });
+  return parseResponse(res, 'Failed to send test alert');
+}
+
+export async function triggerAlert(topic) {
+  const res = await fetch(`${API_BASE}/alerts/trigger`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic }),
+  });
+  return parseResponse(res, 'Failed to trigger alert');
+}
+
+export async function fetchAlertCount() {
+  const res = await fetch(`${API_BASE}/alerts/count`);
+  return parseResponse(res, 'Failed to fetch alert count');
+}
