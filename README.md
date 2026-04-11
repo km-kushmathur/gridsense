@@ -3,6 +3,8 @@
 **Real-time grid carbon dashboard and demand spike simulator.**  
 Built at HooHacks 2026.
 
+![GridSense landing page](home_page.png)
+
 ---
 
 ## What it does
@@ -13,9 +15,15 @@ Built at HooHacks 2026.
 - **Grid stress simulator** — Side-by-side heat wave / cold snap / normal day timelines showing how load-shifting prevents grid failure
 - **Push alerts** — Subscribe to ntfy.sh notifications when Grid Load Pressure crosses 70%
 
+## Screenshots
+
+![Live carbon rate and Clean Power Score dashboard](power_score.png)
+
+![Optimal window detection and appliance nudge panel](optimal_window.png)
+
 ## Demo
 
-https://github.com/user-attachments/assets/GridSense - Google Chrome 2026-03-22 11-42-16.mp4
+[Watch the full demo](GridSense%20-%20Google%20Chrome%202026-03-22%2011-42-16.mp4)
 
 ## Tech stack
 
