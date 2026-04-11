@@ -5,7 +5,6 @@ import contextlib
 import os
 import re
 import time
-from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -15,7 +14,6 @@ try:
     from .alert_service import AlertService
     from .demand_simulator import DemandSimulator
     from .geo_utils import geocode_city
-    from .grid_utils import emissions_band_from_score, region_label_for
     from .map_service import fetch_static_map
     from .models import (
         AlertCountResponse,
@@ -44,7 +42,6 @@ except ImportError:
     from alert_service import AlertService
     from demand_simulator import DemandSimulator
     from geo_utils import geocode_city
-    from grid_utils import emissions_band_from_score, region_label_for
     from map_service import fetch_static_map
     from models import (
         AlertCountResponse,
@@ -115,10 +112,6 @@ def _cache_get_any(key: str) -> object | None:
 
 def _cache_set(key: str, value: object) -> None:
     CACHE[key] = (time.time(), value)
-
-
-def _status_from_green_score(green_score: float) -> str:
-    return emissions_band_from_score(green_score)
 
 
 async def _resolve_city(city: str) -> tuple[float, float, str]:
@@ -194,35 +187,18 @@ def _build_intensity_result(
     lat: float,
     lng: float,
     region: str,
-    realtime: dict,
     weather_now: dict,
     heat_wave: bool,
 ) -> dict:
-    """Merge realtime and weather data into the intensity payload."""
-    green_score = float(realtime.get("green_score", 50.0))
-    clean_power_score = float(realtime.get("clean_power_score", green_score))
-    temp_c = float(weather_now.get("temp_c", 22.0))
-    grid_stress = simulator.estimate_current_grid_stress(
-        temp_c=temp_c,
-        moer=float(realtime.get("moer", 0.0)),
-        hour=datetime.now(timezone.utc).hour,
-        scenario="normal",
+    """Build the dashboard current-signal payload from the shared demo model."""
+    return get_mock_intensity(
+        city,
+        region=region,
+        latitude=lat,
+        longitude=lng,
+        temp_c=float(weather_now.get("temp_c", 22.0)),
+        heat_wave=heat_wave,
     )
-    return {
-        "city": city,
-        "region": region,
-        "region_label": region_label_for(region),
-        "latitude": lat,
-        "longitude": lng,
-        "moer": float(realtime.get("moer", 0)),
-        "pct_renewable": float(realtime.get("pct_renewable", 0)),
-        "clean_power_score": clean_power_score,
-        "green_score": green_score,
-        "status": _status_from_green_score(green_score),
-        "temp_c": temp_c,
-        "heat_wave": heat_wave,
-        "grid_stress": grid_stress,
-    }
 
 
 async def _fetch_intensity_payload(city: str, use_cache: bool = True) -> dict:
@@ -239,10 +215,9 @@ async def _fetch_intensity_payload(city: str, use_cache: bool = True) -> dict:
 
     try:
         lat, lng, region = await _resolve_city(city)
-        realtime = await watttime.get_realtime(region)
         weather_now = await weather.get_current(lat, lng, city)
         heat_wave = await weather.is_heat_wave(lat, lng, city)
-        result = _build_intensity_result(city, lat, lng, region, realtime, weather_now, heat_wave)
+        result = _build_intensity_result(city, lat, lng, region, weather_now, heat_wave)
     except ValueError:
         result = _mock_or_raise(city, "intensity", ValueError(f"Could not geocode city: {city}"))
     except Exception as exc:

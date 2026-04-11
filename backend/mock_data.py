@@ -382,35 +382,46 @@ def get_mock_weather_response(city: str) -> dict[str, float | str | bool | list[
     }
 
 
-def get_mock_intensity(city: str) -> dict[str, float | str | bool]:
+def get_mock_intensity(
+    city: str,
+    region: str = MOCK_REGION,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    temp_c: float | None = None,
+    heat_wave: bool | None = None,
+) -> dict[str, float | str | bool]:
     """Return the intensity payload with weather context."""
-    current_forecast = get_mock_forecast(MOCK_REGION, city)
+    current_forecast = get_mock_forecast(region, city)
     current_moer = float(current_forecast[0]["moer"])
     green_score = float(current_forecast[0]["clean_power_score"])
     weather = get_mock_weather_response(city)
-    current_simulation = build_mock_simulation(city, "normal")["timeline"][0]
+    current_simulation = build_mock_simulation(city, "normal", region=region)["timeline"][0]
     lat, lng = get_mock_coordinates(city)
+    resolved_lat = float(latitude) if latitude is not None else lat
+    resolved_lng = float(longitude) if longitude is not None else lng
+    resolved_temp = float(temp_c) if temp_c is not None else float(weather["temp_c"])
+    resolved_heat_wave = bool(weather["heat_wave"]) if heat_wave is None else bool(heat_wave)
     status = emissions_band_from_score(green_score)
     return {
         "city": city,
-        "region": MOCK_REGION,
-        "region_label": region_label_for(MOCK_REGION),
-        "latitude": lat,
-        "longitude": lng,
+        "region": region,
+        "region_label": region_label_for(region),
+        "latitude": resolved_lat,
+        "longitude": resolved_lng,
         "moer": current_moer,
         "pct_renewable": round(green_score / 100, 2),
         "clean_power_score": green_score,
         "green_score": green_score,
         "status": status,
-        "temp_c": float(weather["temp_c"]),
-        "heat_wave": bool(weather["heat_wave"]),
+        "temp_c": resolved_temp,
+        "heat_wave": resolved_heat_wave,
         "grid_stress": float(current_simulation["grid_stress"]),
     }
 
 
-def build_mock_simulation(city: str, scenario: str) -> dict[str, object]:
+def build_mock_simulation(city: str, scenario: str, region: str = MOCK_REGION) -> dict[str, object]:
     """Return a deterministic simulation response."""
-    forecast = get_mock_forecast(MOCK_REGION, city)
+    forecast = get_mock_forecast(region, city)
     weather = get_mock_weather_forecast(city)
     multiplier = 1.4 if scenario == "heat_wave" else 1.3 if scenario == "cold_snap" else 1.0
     timeline: list[dict[str, float | int | str]] = []
@@ -427,7 +438,7 @@ def build_mock_simulation(city: str, scenario: str) -> dict[str, object]:
         clean_power_score = float(point["clean_power_score"])
         grid_stress = _hardcoded_grid_load_pressure(
             city=city,
-            region=MOCK_REGION,
+            region=region,
             temp_c=temp_c,
             hour=hour,
             scenario=scenario,

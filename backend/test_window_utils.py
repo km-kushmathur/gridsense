@@ -158,6 +158,25 @@ class HardcodedForecastTests(unittest.TestCase):
         self.assertEqual(float(first["clean_power_score"]), float(second["clean_power_score"]))
         self.assertEqual(float(first["grid_stress"]), float(second["grid_stress"]))
 
+    def test_mock_intensity_preserves_location_context_overrides(self) -> None:
+        intensity = get_mock_intensity(
+            "Austin",
+            region="ERCOT",
+            latitude=30.2672,
+            longitude=-97.7431,
+            temp_c=31.5,
+            heat_wave=True,
+        )
+
+        self.assertEqual(str(intensity["region"]), "ERCOT")
+        self.assertEqual(str(intensity["region_label"]), "Texas balancing region")
+        self.assertEqual(float(intensity["latitude"]), 30.2672)
+        self.assertEqual(float(intensity["longitude"]), -97.7431)
+        self.assertEqual(float(intensity["temp_c"]), 31.5)
+        self.assertTrue(bool(intensity["heat_wave"]))
+        self.assertLess(float(intensity["clean_power_score"]), 100.0)
+        self.assertGreater(float(intensity["grid_stress"]), 0.0)
+
     def test_regional_score_and_pressure_ordering_is_plausible(self) -> None:
         san_francisco = get_mock_intensity("San Francisco")
         austin = get_mock_intensity("Austin")
@@ -167,6 +186,30 @@ class HardcodedForecastTests(unittest.TestCase):
         self.assertGreater(float(austin["clean_power_score"]), float(chicago["clean_power_score"]))
         self.assertLess(float(san_francisco["grid_stress"]), float(austin["grid_stress"]))
         self.assertLess(float(austin["grid_stress"]), float(chicago["grid_stress"]))
+
+
+class IntensityPayloadTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        main.CACHE.clear()
+
+    async def asyncTearDown(self) -> None:
+        main.CACHE.clear()
+
+    async def test_live_context_uses_demo_current_signal_metrics(self) -> None:
+        with patch("backend.main.use_mock_data", return_value=False):
+            with patch("backend.main._resolve_city", new=AsyncMock(return_value=(30.2672, -97.7431, "ERCOT"))):
+                with patch("backend.main.weather.get_current", new=AsyncMock(return_value={"temp_c": 31.5, "condition": "Clear"})):
+                    with patch("backend.main.weather.is_heat_wave", new=AsyncMock(return_value=True)):
+                        with patch("backend.main.watttime.get_realtime", new=AsyncMock(side_effect=AssertionError("realtime path should not be used"))):
+                            result = await main._fetch_intensity_payload("Austin", use_cache=False)
+
+        self.assertEqual(str(result["region"]), "ERCOT")
+        self.assertEqual(str(result["region_label"]), "Texas balancing region")
+        self.assertEqual(float(result["temp_c"]), 31.5)
+        self.assertTrue(bool(result["heat_wave"]))
+        self.assertGreater(float(result["clean_power_score"]), 0.0)
+        self.assertLess(float(result["clean_power_score"]), 100.0)
+        self.assertGreater(float(result["grid_stress"]), 0.0)
 
 
 if __name__ == "__main__":
