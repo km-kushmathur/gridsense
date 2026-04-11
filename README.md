@@ -3,7 +3,7 @@
 **Real-time grid carbon dashboard and demand spike simulator.**  
 Built at HooHacks 2026.
 
-![GridSense landing page](home_page.png)
+![GridSense landing page](assets/home_page.png)
 
 ---
 
@@ -17,9 +17,9 @@ Built at HooHacks 2026.
 
 ## Screenshots
 
-![Live carbon rate and Clean Power Score dashboard](power_score.png)
+![Live carbon rate and Clean Power Score dashboard](assets/power_score.png)
 
-![Optimal window detection and appliance nudge panel](optimal_window.png)
+![Optimal window detection and appliance nudge panel](assets/optimal_window.png)
 
 ## Demo
 
