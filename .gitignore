@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 frontend/node_modules/
 dist/
+.claude/
+.codex/
