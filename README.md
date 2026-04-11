@@ -23,7 +23,7 @@ Built at HooHacks 2026.
 
 ## Demo
 
-A full demo recording is available in the [Releases](../../releases) section.
+[![GridSense Demo](https://img.youtube.com/vi/Tu1SLkQ7-Zg/0.jpg)](https://www.youtube.com/watch?v=Tu1SLkQ7-Zg)
 
 ## Tech stack
 
