@@ -23,7 +23,7 @@ Built at HooHacks 2026.
 
 ## Demo
 
-[Watch the full demo](GridSense%20-%20Google%20Chrome%202026-03-22%2011-42-16.mp4)
+A full demo recording is available in the [Releases](../../releases) section.
 
 ## Tech stack
 
